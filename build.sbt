@@ -1,17 +1,24 @@
-name := """parking-service"""
+name := "parking-service"
+
 organization := "com.example"
 
 version := "1.0-SNAPSHOT"
 
-lazy val root = (project in file(".")).enablePlugins(PlayScala)
-
 scalaVersion := "2.13.18"
 
-libraryDependencies += guice
-libraryDependencies += "org.scalatestplus.play" %% "scalatestplus-play" % "7.0.2" % Test
+lazy val root = (project in file("."))
+  .enablePlugins(PlayScala)
 
-// Adds additional packages into Twirl
-//TwirlKeys.templateImports += "com.example.controllers._"
+libraryDependencies ++= Seq(
+  guice,
 
-// Adds additional packages into conf/routes
-// play.sbt.routes.RoutesKeys.routesImport += "com.example.binders._"
+  "com.typesafe.play" %% "play-slick" % "5.3.0",
+  "com.typesafe.play" %% "play-slick-evolutions" % "5.3.0",
+
+  "com.mysql" % "mysql-connector-j" % "8.3.0",
+
+  "org.scalatestplus.play" %% "scalatestplus-play" % "7.0.2" % Test
+)
+
+ThisBuild / libraryDependencySchemes +=
+  "org.scala-lang.modules" %% "scala-xml" % VersionScheme.Always
