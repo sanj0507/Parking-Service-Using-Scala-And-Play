@@ -15,23 +15,72 @@ class VisitController @Inject()(
 )(implicit ec: ExecutionContext)
     extends BaseController {
 
-  implicit val visitFormat = Json.format[Visit]
-
   visitService.initialize()
 
   def checkIn = Action.async(parse.json) { request =>
 
-    val visit = request.body.as[Visit]
+  val json = request.body
 
-    visitService.checkIn(visit).map { _ =>
-      Ok(Json.obj("message" -> "Vehicle checked in"))
-    }
+val visit = Visit(
+  id = 0,
+  vehicleNumber = (json \ "vehicleNumber").as[String],
+  customerName = (json \ "customerName").as[String],
+  status = (json \ "status").as[String]
+)
+
+  visitService.checkIn(visit).map { _ =>
+
+    Created(Json.obj(
+      "message" -> "Vehicle checked in successfully"
+    ))
+
+  }.recover {
+
+    case ex: Exception =>
+      BadRequest(Json.obj(
+        "error" -> ex.getMessage
+      ))
   }
+}
 
   def getAllVisits = Action.async {
 
     visitService.getVisits().map { visits =>
-      Ok(Json.toJson(visits))
+      Ok(Json.obj(
+  "count" -> visits.size,
+  "data" -> visits
+))
     }
   }
+
+  def getVisitById(id: Long) = Action.async {
+
+    visitService.getVisitById(id).map {
+
+      case Some(visit) =>
+        Ok(Json.toJson(visit))
+
+      case None =>
+        NotFound(Json.obj(
+          "message" -> s"Visit with id $id not found"
+        ))
+    }
+  }
+
+  def requestVehicle(id: Long) = Action.async {
+
+  visitService.requestVehicle(id).map { _ =>
+
+    Ok(Json.obj(
+      "message" -> s"Vehicle requested successfully for visit $id"
+    ))
+
+  }.recover {
+
+    case ex: Exception =>
+      BadRequest(Json.obj(
+        "error" -> ex.getMessage
+      ))
+  }
+}
 }
