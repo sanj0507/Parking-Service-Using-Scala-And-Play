@@ -11,14 +11,13 @@ lazy val root = (project in file("."))
 
 libraryDependencies ++= Seq(
   guice,
-
+  evolutions,
   "com.typesafe.play" %% "play-slick" % "5.3.0",
   "com.typesafe.play" %% "play-slick-evolutions" % "5.3.0",
-
   "com.mysql" % "mysql-connector-j" % "8.3.0",
-
   "org.scalatestplus.play" %% "scalatestplus-play" % "7.0.2" % Test
 )
 
 ThisBuild / libraryDependencySchemes +=
   "org.scala-lang.modules" %% "scala-xml" % VersionScheme.Always
+

@@ -1,69 +1,352 @@
+docker-compose logs -f mysql
+docker-compose down
 ## Parking Visit & Valet Management API
 
-A REST API service built using Scala, Play Framework, Slick, and MySQL for managing parking visits and valet operations.
+A REST API backend built using Play Framework, Scala, Slick, MySQL, and Docker for managing parking visits and valet workflows.
+
+The system supports:
+- Vehicle check-in/check-out
+- Valet workflow management
+- Visit status tracking
+- Add-on services
+- Activity logging
+- Dockerized deployment
 
 ---
 
-### Day 1 Progress
+# Tech Stack
 
-* Completed Play Framework project setup
-* Configured SBT and application settings
-* Setup VS Code for Scala development
-* Created initial backend structure
-* Implemented first API endpoint:
-
-  * `GET /hello`
-
-**Learnings**
-
-* Basics of Play Framework and MVC architecture
-* Controllers, Routes, Actions, Requests, and Responses
-* SBT and dependency management
-* Basic backend API flow
+- Scala
+- Play Framework
+- Slick ORM
+- MySQL
+- Docker
+- Docker Compose
+- SBT
 
 ---
 
-### Day 2 Progress
+# Project Architecture
 
-* Configured MySQL database connection
-* Integrated Slick ORM with Play Framework
-* Added required dependencies for MySQL and Slick
-* Created backend layers:
+```text
+Controller → Service → Repository → MySQL
+```
 
-  * `models`
-  * `repository`
-  * `service`
+### Layers
 
-**Learnings**
-
-* MySQL integration in Play
-* Slick ORM basics
-* Repository and service layer architecture
-* Database configuration and dependency management
+| Layer | Responsibility |
+|---|---|
+| Controller | Handles API requests/responses |
+| Service | Business logic |
+| Repository | Database operations |
+| MySQL | Persistent storage |
 
 ---
 
-### Day 3 Progress
+# Features
 
-* Created `Visit` model using Scala case class
-* Implemented Slick table mapping
-* Built repository and service layers
-* Created `VisitController`
-* Implemented basic POST API:
+## Parking Visit Management
 
-  * `POST /check-in`
-* Successfully stored visit/user data in MySQL
+- Vehicle Check-In
+- Vehicle Check-Out
+- Get Visit Details
+- Get All Visits
 
-**Learnings**
+## Valet Workflow
 
-* Case classes and JSON parsing
-* Slick table mapping
-* Async API handling using `Future`
-* End-to-end flow:
+- Request Vehicle
+- Acknowledge Request
+- Mark Vehicle Ready
+- Track Visit Status
 
-  * Controller → Service → Repository → MySQL
+## Additional Services
+
+- Car Wash
+- Priority Parking
+
+## Activity Logging
+
+- Track valet workflow activities
+- Store visit activity history
 
 ---
 
-Current Status:
-Backend successfully connected to MySQL with working basic POST API operations.
+# Visit Status Workflow
+
+```text
+CheckedIn
+   ↓
+Requested
+   ↓
+InProgress
+   ↓
+Ready
+   ↓
+CheckedOut
+```
+
+---
+
+# Docker Setup
+
+## Prerequisites
+
+Install:
+
+- Docker Desktop
+- Docker Compose
+
+---
+
+# Running the Application Using Docker
+
+## Build and Start Containers
+
+```bash
+docker-compose up --build
+```
+
+## Run in Background
+
+```bash
+docker-compose up -d --build
+```
+
+## Stop Containers
+
+```bash
+docker-compose down
+```
+
+## View Backend Logs
+
+```bash
+docker-compose logs -f backend
+```
+
+## View MySQL Logs
+
+```bash
+docker-compose logs -f mysql
+```
+
+---
+
+# Services
+
+| Service | Container | Port |
+|---|---|---|
+| Backend | valet_backend | 9000 |
+| MySQL | valet_mysql | 3307 |
+
+---
+
+# API Base URL
+
+```text
+http://localhost:9000
+```
+
+---
+
+# API Endpoints
+
+## Health Check
+
+### GET /hello
+
+Returns test response.
+
+---
+
+# Parking Visit APIs
+
+## 1. Check-In Vehicle
+
+### POST /check-in
+
+### Request Body
+
+```json
+{
+  "vehicleNumber": "KA01AB1234",
+  "customerName": "Alice",
+  "status": "CheckedIn"
+}
+```
+
+---
+
+## 2. Get All Visits
+
+### GET /visits
+
+Returns all parking visits.
+
+---
+
+## 3. Get Visit By ID
+
+### GET /visits/:id
+
+Example:
+
+```text
+GET /visits/1
+```
+
+---
+
+## 4. Request Vehicle
+
+### POST /visits/:id/request-vehicle
+
+Updates visit status:
+
+```text
+CheckedIn → Requested
+```
+
+---
+
+## 5. Acknowledge Request
+
+### POST /visits/:id/acknowledge
+
+Updates visit status:
+
+```text
+Requested → InProgress
+```
+
+---
+
+## 6. Vehicle Ready
+
+### POST /visits/:id/ready
+
+Updates visit status:
+
+```text
+InProgress → Ready
+```
+
+---
+
+## 7. Add-On Service
+
+### POST /visits/:id/add-on
+
+### Request Body
+
+```json
+{
+  "service": "Car Wash"
+}
+```
+
+---
+
+## 8. Check-Out Vehicle
+
+### POST /visits/:id/check-out
+
+Updates visit status:
+
+```text
+Ready → CheckedOut
+```
+
+---
+
+# Sample Curl Commands
+
+## Get All Visits
+
+```bash
+curl -i http://localhost:9000/visits
+```
+
+---
+
+## Check-In Vehicle
+
+```bash
+curl -i \
+-H "Content-Type: application/json" \
+-d '{
+  "vehicleNumber":"KA01AB1234",
+  "customerName":"Alice",
+  "status":"CheckedIn"
+}' \
+http://localhost:9000/check-in
+```
+
+---
+
+# Local Development Setup
+
+## Prerequisites
+
+- Java 17
+- SBT
+- MySQL
+
+---
+
+# Run Locally
+
+```bash
+sbt run
+```
+
+Application runs at:
+
+```text
+http://localhost:9000
+```
+
+---
+
+# Database Configuration
+
+Configured using:
+
+```text
+conf/application.conf
+```
+
+Database:
+- MySQL 8.0
+- Database Name: valet_db
+
+---
+
+# Learning Progress
+
+## Day 1
+- Play Framework setup
+- MVC architecture
+- First API endpoint
+
+## Day 2
+- MySQL integration
+- Slick ORM
+- Repository and service layers
+
+## Day 3
+- Visit model creation
+- POST check-in API
+- End-to-end DB flow
+
+## Day 4
+- Docker integration
+- REST API expansion
+- Workflow APIs
+- Status management
+
+---
+
+add this to reasme
+
+

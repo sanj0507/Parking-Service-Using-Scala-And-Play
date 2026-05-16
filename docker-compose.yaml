@@ -1,0 +1,54 @@
+services:
+  mysql:
+    image: mysql:8.0
+    container_name: valet_mysql
+    environment:
+      MYSQL_ROOT_PASSWORD: root123
+      MYSQL_DATABASE: valet_db
+      MYSQL_USER: valet_user
+      MYSQL_PASSWORD: valet_password
+    ports:
+      - "3307:3306"
+    volumes:
+      - mysql_data:/var/lib/mysql
+    networks:
+      - parking-network
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    restart: unless-stopped
+
+  backend:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: valet_backend
+    environment:
+      PLAY_ENVIRONMENT: production
+      DATABASE_URL: "jdbc:mysql://mysql:3306/valet_db"
+      DATABASE_USER: root
+      DATABASE_PASSWORD: root123
+      APPLICATION_SECRET: "changeme-this-is-a-long-secret-for-jwt-256-bits"
+    ports:
+      - "9000:9000"
+    depends_on:
+      mysql:
+        condition: service_healthy
+    networks:
+      - parking-network
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:9000/visits"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+
+volumes:
+  mysql_data:
+
+networks:
+  parking-network:
+    driver: bridge

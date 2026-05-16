@@ -1,0 +1,5 @@
+[0m[[0m[31merror[0m] [0m[0mC:\Users\sanja\Desktop\sanjana\metropolis\Parking-Service-Using-Scala-And-Play\parking-service\app\service\VisitService.scala:33:7: method checkIn is defined twice;[0m
+[0m[[0m[31merror[0m] [0m[0m  the conflicting method checkIn was defined at line 16:7[0m
+[0m[[0m[31merror[0m] [0m[0m  def checkIn(visit: Visit): Future[Int] = {[0m
+[0m[[0m[31merror[0m] [0m[0m      ^[0m
+[0m[[0m[31merror[0m] [0m[0mone error found[0m
