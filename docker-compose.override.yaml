@@ -1,0 +1,13 @@
+# Local development overrides
+# This file is automatically merged with docker-compose.yaml when running locally
+# Useful for development settings without modifying the main compose file
+
+services:
+  backend:
+    environment:
+      # Development environment
+      PLAY_ENVIRONMENT: development
+      LOG_LEVEL: DEBUG
+    # Longer startup time for development builds
+    healthcheck:
+      start_period: 60s
