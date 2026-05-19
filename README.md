@@ -1,15 +1,13 @@
-docker-compose logs -f mysql
-docker-compose down
-## Parking Visit & Valet Management API
+# Parking Visit & Valet Management API
 
-A REST API backend built using Play Framework, Scala, Slick, MySQL, and Docker for managing parking visits and valet workflows.
+A REST API backend built using Play Framework, Scala, Slick ORM, MySQL, and Docker for managing parking visits and valet workflows.
 
 The system supports:
-- Vehicle check-in/check-out
-- Valet workflow management
-- Visit status tracking
-- Add-on services
-- Activity logging
+- Vehicle check-in and check-out
+- Valet workflow tracking
+- Visit status management
+- Add-on parking services
+- Activity workflow transitions
 - Dockerized deployment
 
 ---
@@ -32,13 +30,13 @@ The system supports:
 Controller → Service → Repository → MySQL
 ```
 
-### Layers
+## Layers
 
 | Layer | Responsibility |
 |---|---|
 | Controller | Handles API requests/responses |
 | Service | Business logic |
-| Repository | Database operations |
+| Repository | Database access |
 | MySQL | Persistent storage |
 
 ---
@@ -54,24 +52,14 @@ Controller → Service → Repository → MySQL
 
 ## Valet Workflow
 
-- Request Vehicle
-- Acknowledge Request
-- Mark Vehicle Ready
-- Track Visit Status
+- Customer requests vehicle
+- Attendant acknowledges request
+- Vehicle marked ready
+- Customer checks out vehicle
 
-## Additional Services
+## Status Tracking
 
-- Car Wash
-- Priority Parking
-
-## Activity Logging
-
-- Track valet workflow activities
-- Store visit activity history
-
----
-
-# Visit Status Workflow
+Supports complete valet lifecycle:
 
 ```text
 CheckedIn
@@ -85,6 +73,12 @@ Ready
 CheckedOut
 ```
 
+## Add-On Services
+
+- Car Wash
+- Priority Parking
+- Additional valet services
+
 ---
 
 # Docker Setup
@@ -92,13 +86,12 @@ CheckedOut
 ## Prerequisites
 
 Install:
-
 - Docker Desktop
 - Docker Compose
 
 ---
 
-# Running the Application Using Docker
+# Run Using Docker
 
 ## Build and Start Containers
 
@@ -151,9 +144,9 @@ http://localhost:9000
 
 # API Endpoints
 
-## Health Check
+# Health Check
 
-### GET /hello
+## GET /hello
 
 Returns test response.
 
@@ -197,6 +190,8 @@ GET /visits/1
 
 ---
 
+# Valet Workflow APIs
+
 ## 4. Request Vehicle
 
 ### POST /visits/:id/request-vehicle
@@ -213,7 +208,9 @@ CheckedIn → Requested
 
 ### POST /visits/:id/acknowledge
 
-Updates visit status:
+Valet accepts the request.
+
+Updates status:
 
 ```text
 Requested → InProgress
@@ -225,7 +222,9 @@ Requested → InProgress
 
 ### POST /visits/:id/ready
 
-Updates visit status:
+Vehicle ready for pickup.
+
+Updates status:
 
 ```text
 InProgress → Ready
@@ -233,7 +232,26 @@ InProgress → Ready
 
 ---
 
-## 7. Add-On Service
+## 7. Check-Out Vehicle
+
+### POST /visits/:id/check-out
+
+Customer exits parking facility.
+
+Updates status:
+
+```text
+Ready → CheckedOut
+```
+
+Also updates:
+- exit time
+
+---
+
+# Add-On Service API
+
+## 8. Add-On Service
 
 ### POST /visits/:id/add-on
 
@@ -243,18 +261,6 @@ InProgress → Ready
 {
   "service": "Car Wash"
 }
-```
-
----
-
-## 8. Check-Out Vehicle
-
-### POST /visits/:id/check-out
-
-Updates visit status:
-
-```text
-Ready → CheckedOut
 ```
 
 ---
@@ -280,6 +286,55 @@ curl -i \
   "status":"CheckedIn"
 }' \
 http://localhost:9000/check-in
+```
+
+---
+
+## Request Vehicle
+
+```bash
+curl -X POST \
+http://localhost:9000/visits/1/request-vehicle
+```
+
+---
+
+## Acknowledge Request
+
+```bash
+curl -X POST \
+http://localhost:9000/visits/1/acknowledge
+```
+
+---
+
+## Mark Vehicle Ready
+
+```bash
+curl -X POST \
+http://localhost:9000/visits/1/ready
+```
+
+---
+
+## Add-On Service
+
+```bash
+curl -X POST \
+-H "Content-Type: application/json" \
+-d '{
+  "service":"Car Wash"
+}' \
+http://localhost:9000/visits/1/add-on
+```
+
+---
+
+## Check-Out Vehicle
+
+```bash
+curl -X POST \
+http://localhost:9000/visits/1/check-out
 ```
 
 ---
@@ -310,7 +365,7 @@ http://localhost:9000
 
 # Database Configuration
 
-Configured using:
+Configured in:
 
 ```text
 conf/application.conf
@@ -322,30 +377,20 @@ Database:
 
 ---
 
-# Learning Progress
+# Database Schema
 
-## Day 1
-- Play Framework setup
-- MVC architecture
-- First API endpoint
+## parking_service
 
-## Day 2
-- MySQL integration
-- Slick ORM
-- Repository and service layers
-
-## Day 3
-- Visit model creation
-- POST check-in API
-- End-to-end DB flow
-
-## Day 4
-- Docker integration
-- REST API expansion
-- Workflow APIs
-- Status management
+| Column | Type |
+|---|---|
+| id | INT |
+| vehicle_number | VARCHAR |
+| customer_name | VARCHAR |
+| status | VARCHAR |
+| valet_name | VARCHAR |
+| add_on_service | VARCHAR |
+| entry_time | TIMESTAMP |
+| exit_time | TIMESTAMP |
 
 ---
-
-
 

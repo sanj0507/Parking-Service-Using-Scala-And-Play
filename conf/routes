@@ -18,3 +18,11 @@ GET      /visits           controllers.VisitController.getAllVisits
 GET      /visits/:id       controllers.VisitController.getVisitById(id: Long)
 
 POST    /visits/:id/request-vehicle    controllers.VisitController.requestVehicle(id: Long)
+
+POST    /visits/:id/acknowledge        controllers.VisitController.acknowledgeRequest(id: Long)
+
+POST    /visits/:id/ready              controllers.VisitController.ready(id: Long)
+
+POST    /visits/:id/add-on             controllers.VisitController.addOn(id: Long)
+
+POST    /visits/:id/check-out          controllers.VisitController.checkOut(id: Long)

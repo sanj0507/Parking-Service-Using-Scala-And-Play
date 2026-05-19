@@ -12,22 +12,16 @@ import scala.concurrent.{ExecutionContext, Future}
 class VisitRepository @Inject()(
     dbConfigProvider: DatabaseConfigProvider
 )(implicit ec: ExecutionContext) {
-
   private val dbConfig = dbConfigProvider.get[MySQLProfile]
-
   private val db = dbConfig.db
 
   class VisitsTable(tag: Tag)
       extends Table[Visit](tag, "visits") {
 
     def id = column[Long]("id", O.PrimaryKey, O.AutoInc)
-
     def vehicleNumber = column[String]("vehicle_number")
-
     def customerName = column[String]("customer_name")
-
     def status = column[String]("status")
-
     def createdAt = column[String]("created_at")
 
     def * =
@@ -48,22 +42,22 @@ class VisitRepository @Inject()(
   def getById(id: Long): Future[Option[Visit]] =
     db.run(visits.filter(_.id === id).result.headOption)
 
-    def updateStatus(id: Long, status: String): Future[Int] =
-  db.run(
-    visits
-      .filter(_.id === id)
-      .map(_.status)
-      .update(status)
-  )
+  def updateStatus(id: Long, status: String): Future[Int] =
+    db.run(
+      visits
+        .filter(_.id === id)
+        .map(_.status)
+        .update(status)
+    )
 
   def findActiveVisitByVehicle(vehicleNumber: String): Future[Option[Visit]] =
-  db.run(
-    visits
-      .filter(v =>
-        v.vehicleNumber === vehicleNumber &&
-        v.status =!= "CheckedOut"
-      )
-      .result
-      .headOption
-  )
+    db.run(
+      visits
+        .filter(v =>
+          v.vehicleNumber === vehicleNumber &&
+          v.status =!= "CheckedOut"
+        )
+        .result
+        .headOption
+    )
 }
