@@ -52,12 +52,28 @@ class VisitService @Inject()(
       errorMessage = "Vehicle can only be requested from CheckedIn status"
     )
 
+  def requestCheckout(id: Long): Future[Int] =
+    updateVisitStatus(
+      id = id,
+      expectedStatus = models.VisitStatus.Ready,
+      nextStatus = models.VisitStatus.RequestedCheckout,
+      errorMessage = "Vehicle can only request checkout from Ready status"
+    )
+
   def acknowledgeRequest(id: Long): Future[Int] =
     updateVisitStatus(
       id = id,
       expectedStatus = models.VisitStatus.Requested,
       nextStatus = models.VisitStatus.InProgress,
       errorMessage = "Vehicle can only be acknowledged from Requested status"
+    )
+
+  def acceptCheckoutRequest(id: Long): Future[Int] =
+    updateVisitStatus(
+      id = id,
+      expectedStatus = models.VisitStatus.RequestedCheckout,
+      nextStatus = models.VisitStatus.CheckedOut,
+      errorMessage = "Vehicle can only be checked out after a checkout request"
     )
 
   def markReady(id: Long): Future[Int] =
@@ -87,12 +103,7 @@ class VisitService @Inject()(
   }
 
   def checkOut(id: Long): Future[Int] =
-    updateVisitStatus(
-      id = id,
-      expectedStatus = models.VisitStatus.Ready,
-      nextStatus = models.VisitStatus.CheckedOut,
-      errorMessage = "Vehicle can only be checked out from Ready status"
-    )
+    acceptCheckoutRequest(id)
 
   private def updateVisitStatus(
       id: Long,

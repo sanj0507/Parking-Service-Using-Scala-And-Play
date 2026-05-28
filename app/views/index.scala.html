@@ -1,5 +1,41 @@
 @()
 
-@main("Welcome to Play") {
-  <h1>Welcome to Play!</h1>
+@main("Parking Service Dashboard") {
+  <div class="shell app-shell" data-role="Service Advisor">
+    <header class="hero">
+      <div>
+        <p class="eyebrow">Parking Service Using Scala And Play</p>
+        <h1>Separated parking workflows</h1>
+        <p class="lede">Open the user, valet, or admin side from its own URL and use the workflow controls for that role.</p>
+      </div>
+      <div class="role-card">
+        <span class="role-label">Available URLs</span>
+        <div class="link-stack">
+          <a href="/user">User side</a>
+          <a href="/valet">Valet side</a>
+          <a href="/admin">Admin side</a>
+        </div>
+      </div>
+    </header>
+
+    <main class="grid workflow-grid">
+      <section class="panel workflow-panel">
+        <h2>User</h2>
+        <p>Check in vehicles, request vehicle return, and check out completed visits.</p>
+        <a class="panel-link" href="/user">Open user side</a>
+      </section>
+
+      <section class="panel workflow-panel">
+        <h2>Valet</h2>
+        <p>Acknowledge requested vehicles and mark them ready for check-out.</p>
+        <a class="panel-link" href="/valet">Open valet side</a>
+      </section>
+
+      <section class="panel workflow-panel">
+        <h2>Admin</h2>
+        <p>Load all visits and perform support actions across the full workflow.</p>
+        <a class="panel-link" href="/admin">Open admin side</a>
+      </section>
+    </main>
+  </div>
 }

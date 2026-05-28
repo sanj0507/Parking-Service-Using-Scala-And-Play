@@ -1,0 +1,43 @@
+@()
+
+@main("Valet Parking Workflow") {
+  <div class="shell app-shell" data-role="Valet">
+    <nav class="top-nav" aria-label="Workflow navigation">
+      <a href="/">Home</a>
+      <a href="/user">User</a>
+      <a class="active" href="/valet">Valet</a>
+      <a href="/admin">Admin</a>
+    </nav>
+
+    <header class="hero compact-hero">
+      <div>
+        <p class="eyebrow">Valet side</p>
+        <h1>Acknowledge and ready vehicles</h1>
+        <p class="lede">Pick up requested visits, move them in progress, and mark them ready for user check-out.</p>
+      </div>
+      <div class="role-card">
+        <span class="role-label">Requests use role</span>
+        <strong>Valet</strong>
+      </div>
+    </header>
+
+    <main class="grid">
+      <section class="panel wide">
+        <h2>Valet actions</h2>
+        <form id="actionForm" class="stacked">
+          <input name="visitId" type="number" min="1" placeholder="Visit ID" required>
+          <div class="button-row">
+            <button type="button" data-action="get-one" data-base="/valet/visits">Get visit</button>
+            <button type="button" data-action="acknowledge" data-base="/valet/visits">Acknowledge</button>
+            <button type="button" data-action="ready" data-base="/valet/visits">Ready</button>
+          </div>
+        </form>
+      </section>
+
+      <section class="panel wide">
+        <h2>Response</h2>
+        <pre id="responseBox">Ready.</pre>
+      </section>
+    </main>
+  </div>
+}

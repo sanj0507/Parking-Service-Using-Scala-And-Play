@@ -1,0 +1,66 @@
+@()
+
+@main("Admin Parking Workflow") {
+  <div class="shell app-shell" data-role="Admin">
+    <nav class="top-nav" aria-label="Workflow navigation">
+      <a href="/">Home</a>
+      <a href="/user">User</a>
+      <a href="/valet">Valet</a>
+      <a class="active" href="/admin">Admin</a>
+    </nav>
+
+    <header class="hero compact-hero">
+      <div>
+        <p class="eyebrow">Admin side</p>
+        <h1>Manage all visit workflows</h1>
+        <p class="lede">Inspect visits and perform any workflow action when support needs full access.</p>
+      </div>
+      <div class="role-card">
+        <span class="role-label">Requests use role</span>
+        <strong>Admin</strong>
+      </div>
+    </header>
+
+    <main class="grid">
+      <section class="panel">
+        <h2>Check in vehicle</h2>
+        <form id="checkInForm" data-endpoint="/admin/visits/check-in">
+          <input name="vehicleNumber" placeholder="Vehicle number" required>
+          <input name="customerName" placeholder="Customer name" required>
+          <select name="status">
+            <option>CheckedIn</option>
+          </select>
+          <button type="submit">Check in</button>
+        </form>
+      </section>
+
+      <section class="panel">
+        <h2>Admin actions</h2>
+        <form id="actionForm" class="stacked">
+          <input name="visitId" type="number" min="1" placeholder="Visit ID" required>
+          <input name="service" placeholder="Add-on service">
+          <div class="button-row">
+            <button type="button" data-action="get-one" data-base="/admin/visits">Get visit</button>
+            <button type="button" data-action="request" data-base="/admin/visits">Request vehicle</button>
+            <button type="button" data-action="acknowledge" data-base="/admin/visits">Acknowledge</button>
+            <button type="button" data-action="ready" data-base="/admin/visits">Ready</button>
+            <button type="button" data-action="add-on" data-base="/admin/visits">Add-on</button>
+            <button type="button" data-action="check-out" data-base="/admin/visits">Check out</button>
+          </div>
+        </form>
+      </section>
+
+      <section class="panel wide">
+        <h2>Admin views</h2>
+        <div class="button-row">
+          <button type="button" id="loadVisits" data-endpoint="/admin/visits">Load all visits</button>
+        </div>
+      </section>
+
+      <section class="panel wide">
+        <h2>Response</h2>
+        <pre id="responseBox">Ready.</pre>
+      </section>
+    </main>
+  </div>
+}

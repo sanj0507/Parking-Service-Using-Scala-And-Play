@@ -6,6 +6,8 @@ object VisitStatus {
 
   val Requested = "Requested"
 
+  val RequestedCheckout = "RequestedCheckout"
+
   val InProgress = "InProgress"
 
   val Ready = "Ready"
@@ -15,6 +17,7 @@ object VisitStatus {
   val allStatuses = Seq(
     CheckedIn,
     Requested,
+    RequestedCheckout,
     InProgress,
     Ready,
     CheckedOut

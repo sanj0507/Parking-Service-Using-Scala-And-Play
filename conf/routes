@@ -3,26 +3,106 @@
 # https://www.playframework.com/documentation/latest/ScalaRouting
 # ~~~~
 
-
-
 # Map static resources from the /public folder to the /assets URL path
-GET     /assets/*file               controllers.Assets.versioned(path="/public", file: Asset)
+GET     /assets/*file                controllers.Assets.versioned(path="/public", file: Asset)
 
+GET     /                            controllers.HomeController.index()
+GET     /user                        controllers.HomeController.user()
+GET     /valet                       controllers.HomeController.valet()
+GET     /admin                       controllers.HomeController.admin()
 
++ nocsrf
+POST    /visits/check-in             controllers.VisitController.checkIn
++ nocsrf
+POST    /check-in                    controllers.VisitController.checkIn
 
+GET     /visits                      controllers.VisitController.getAllVisits
+GET     /visits/:id                  controllers.VisitController.getVisitById(id: Long)
 
-POST     /check-in         controllers.VisitController.checkIn
++ nocsrf
+POST    /visits/:id/request-vehicle  controllers.VisitController.requestVehicle(id: Long)
++ nocsrf
+POST    /visits/:id/request-checkout  controllers.VisitController.requestCheckout(id: Long)
++ nocsrf
+POST    /visits/:id/acknowledge      controllers.VisitController.acknowledgeRequest(id: Long)
++ nocsrf
+POST    /visits/:id/ready            controllers.VisitController.ready(id: Long)
++ nocsrf
+POST    /visits/:id/add-on           controllers.VisitController.addOn(id: Long)
++ nocsrf
+POST    /visits/:id/add-ons          controllers.VisitController.addOn(id: Long)
++ nocsrf
+POST    /visits/:id/check-out        controllers.VisitController.checkOut(id: Long)
 
-GET      /visits           controllers.VisitController.getAllVisits
+# User-side visit workflow
++ nocsrf
+POST    /user/visits/check-in        controllers.VisitController.checkIn
+GET     /user/visits/:id             controllers.VisitController.getVisitById(id: Long)
++ nocsrf
+POST    /user/visits/:id/request-vehicle controllers.VisitController.requestVehicle(id: Long)
++ nocsrf
+POST    /user/visits/:id/request-checkout controllers.VisitController.requestCheckout(id: Long)
++ nocsrf
+POST    /user/visits/:id/check-out    controllers.VisitController.checkOut(id: Long)
 
-GET      /visits/:id       controllers.VisitController.getVisitById(id: Long)
++ nocsrf
+POST    /api/user/visits/check-in     controllers.VisitController.checkIn
+GET     /api/user/visits/:id         controllers.VisitController.getVisitById(id: Long)
++ nocsrf
+POST    /api/user/visits/:id/request-vehicle controllers.VisitController.requestVehicle(id: Long)
++ nocsrf
+POST    /api/user/visits/:id/request-checkout controllers.VisitController.requestCheckout(id: Long)
++ nocsrf
+POST    /api/user/visits/:id/check-out controllers.VisitController.checkOut(id: Long)
 
-POST    /visits/:id/request-vehicle    controllers.VisitController.requestVehicle(id: Long)
+# Valet-side visit workflow
+GET     /valet/visits/:id            controllers.VisitController.getVisitById(id: Long)
++ nocsrf
+POST    /valet/visits/:id/acknowledge controllers.VisitController.acknowledgeRequest(id: Long)
++ nocsrf
+POST    /valet/visits/:id/ready      controllers.VisitController.ready(id: Long)
++ nocsrf
+POST    /valet/visits/:id/check-out  controllers.VisitController.checkOut(id: Long)
 
-POST    /visits/:id/acknowledge        controllers.VisitController.acknowledgeRequest(id: Long)
+GET     /api/valet/visits/:id        controllers.VisitController.getVisitById(id: Long)
++ nocsrf
+POST    /api/valet/visits/:id/acknowledge controllers.VisitController.acknowledgeRequest(id: Long)
++ nocsrf
+POST    /api/valet/visits/:id/ready  controllers.VisitController.ready(id: Long)
++ nocsrf
+POST    /api/valet/visits/:id/check-out controllers.VisitController.checkOut(id: Long)
 
-POST    /visits/:id/ready              controllers.VisitController.ready(id: Long)
+# Admin-side visit workflow
+GET     /admin/visits                controllers.VisitController.getAllVisits
+GET     /admin/visits/:id            controllers.VisitController.getVisitById(id: Long)
++ nocsrf
+POST    /admin/visits/check-in       controllers.VisitController.checkIn
++ nocsrf
+POST    /admin/visits/:id/request-vehicle controllers.VisitController.requestVehicle(id: Long)
++ nocsrf
+POST    /admin/visits/:id/request-checkout controllers.VisitController.requestCheckout(id: Long)
++ nocsrf
+POST    /admin/visits/:id/acknowledge controllers.VisitController.acknowledgeRequest(id: Long)
++ nocsrf
+POST    /admin/visits/:id/ready      controllers.VisitController.ready(id: Long)
++ nocsrf
+POST    /admin/visits/:id/add-ons    controllers.VisitController.addOn(id: Long)
++ nocsrf
+POST    /admin/visits/:id/check-out  controllers.VisitController.checkOut(id: Long)
 
-POST    /visits/:id/add-on             controllers.VisitController.addOn(id: Long)
-
-POST    /visits/:id/check-out          controllers.VisitController.checkOut(id: Long)
+GET     /api/admin/visits            controllers.VisitController.getAllVisits
+GET     /api/admin/visits/:id        controllers.VisitController.getVisitById(id: Long)
++ nocsrf
+POST    /api/admin/visits/check-in   controllers.VisitController.checkIn
++ nocsrf
+POST    /api/admin/visits/:id/request-vehicle controllers.VisitController.requestVehicle(id: Long)
++ nocsrf
+POST    /api/admin/visits/:id/request-checkout controllers.VisitController.requestCheckout(id: Long)
++ nocsrf
+POST    /api/admin/visits/:id/acknowledge controllers.VisitController.acknowledgeRequest(id: Long)
++ nocsrf
+POST    /api/admin/visits/:id/ready  controllers.VisitController.ready(id: Long)
++ nocsrf
+POST    /api/admin/visits/:id/add-ons controllers.VisitController.addOn(id: Long)
++ nocsrf
+POST    /api/admin/visits/:id/check-out controllers.VisitController.checkOut(id: Long)

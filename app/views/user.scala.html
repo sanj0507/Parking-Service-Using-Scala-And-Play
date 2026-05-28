@@ -1,0 +1,55 @@
+@()
+
+@main("User Parking Workflow") {
+  <div class="shell app-shell" data-role="Service Advisor">
+    <nav class="top-nav" aria-label="Workflow navigation">
+      <a href="/">Home</a>
+      <a class="active" href="/user">User</a>
+      <a href="/valet">Valet</a>
+      <a href="/admin">Admin</a>
+    </nav>
+
+    <header class="hero compact-hero">
+      <div>
+        <p class="eyebrow">User side</p>
+        <h1>Check in and check out vehicles</h1>
+        <p class="lede">Create visits, request vehicles, and complete check-out after valet marks the vehicle ready.</p>
+      </div>
+      <div class="role-card">
+        <span class="role-label">Requests use role</span>
+        <strong>Service Advisor</strong>
+      </div>
+    </header>
+
+    <main class="grid">
+      <section class="panel">
+        <h2>Check in vehicle</h2>
+        <form id="checkInForm">
+          <input name="vehicleNumber" placeholder="Vehicle number" required>
+          <input name="customerName" placeholder="Customer name" required>
+          <select name="status">
+            <option>CheckedIn</option>
+          </select>
+          <button type="submit">Check in</button>
+        </form>
+      </section>
+
+      <section class="panel">
+        <h2>User actions</h2>
+        <form id="actionForm" class="stacked">
+          <input name="visitId" type="number" min="1" placeholder="Visit ID" required>
+          <div class="button-row">
+            <button type="button" data-action="get-one" data-base="/user/visits">Get visit</button>
+            <button type="button" data-action="request" data-base="/user/visits">Request vehicle</button>
+            <button type="button" data-action="check-out" data-base="/user/visits">Check out</button>
+          </div>
+        </form>
+      </section>
+
+      <section class="panel wide">
+        <h2>Response</h2>
+        <pre id="responseBox">Ready.</pre>
+      </section>
+    </main>
+  </div>
+}
