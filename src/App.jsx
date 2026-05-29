@@ -13,7 +13,6 @@ import {
   Heading,
   Icon,
   Input,
-  Kbd,
   SimpleGrid,
   Stack,
   Text,
@@ -30,7 +29,8 @@ import {
   KeyRound,
   ShieldCheck,
   UserRoundCheck,
-  BadgeCheck
+  BadgeCheck,
+  RefreshCw
 } from "lucide-react";
 import { useMemo, useState } from "react";
 import { parkingApi } from "./api/parkingApi.js";
@@ -40,25 +40,28 @@ const roleCards = [
     key: "user",
     title: "User",
     icon: UserRoundCheck,
-    color: "blue",
-    description: "Can bring a vehicle to lot and request check-in or check-out.",
+    accent: "#2563eb",
+    tag: "SERVICE ADVISOR",
+    description: "Bring a vehicle to the lot and request check-in or check-out.",
     permissions: ["Create Check-In", "Request Check-Out"]
   },
   {
     key: "valet",
     title: "Valet",
     icon: KeyRound,
-    color: "teal",
-    description: "Accepts customer requests and marks vehicles ready for check-out.",
-    permissions: ["Acknowledge", "Ready"]
+    accent: "#0d9488",
+    tag: "VALET OPS",
+    description: "Accept customer requests and mark vehicles ready for check-out.",
+    permissions: ["Acknowledge", "Mark Ready", "Accept Checkout"]
   },
   {
     key: "admin",
     title: "Admin",
     icon: ShieldCheck,
-    color: "orange",
-    description: "Sees active checked-in vehicles and full vehicle entry/exit history.",
-    permissions: ["Current Checked-In List", "Entered & Exited History"]
+    accent: "#d97706",
+    tag: "ADMIN",
+    description: "Monitor active vehicles and view complete entry/exit history.",
+    permissions: ["Checked-In List", "Full History"]
   }
 ];
 
@@ -72,7 +75,7 @@ const actionLabels = {
 };
 
 const emptyResponse = {
-  title: "Live response",
+  title: "AWAITING REQUEST",
   detail: "Run an action to see the API result here.",
   body: null
 };
@@ -86,14 +89,15 @@ export default function App() {
   const [busyAction, setBusyAction] = useState("");
   const toast = useToast();
 
-  const selectedRole = roleCards.find((role) => role.key === activeRole) || roleCards[0];
-  const activeVehicles = visits.filter((visit) => visit.status !== "CheckedOut");
+  const selectedRole = roleCards.find((r) => r.key === activeRole) || roleCards[0];
+  const activeVehicles = visits.filter((v) => v.status !== "CheckedOut");
   const historyVehicles = visits;
-  const pageBg = useColorModeValue("#f3efe8", "gray.950");
-  const panelBg = useColorModeValue("white", "gray.900");
-  const softPanelBg = useColorModeValue("#fffaf2", "gray.800");
-  const mutedText = useColorModeValue("gray.600", "gray.400");
-  const borderColor = useColorModeValue("blackAlpha.100", "whiteAlpha.200");
+
+  const bg = useColorModeValue("#f8f7f4", "gray.950");
+  const cardBg = useColorModeValue("white", "gray.900");
+  const border = useColorModeValue("gray.200", "gray.700");
+  const muted = useColorModeValue("gray.500", "gray.400");
+  const labelColor = useColorModeValue("gray.400", "gray.500");
 
   const responseText = useMemo(() => {
     if (!response.body) return response.detail;
@@ -104,11 +108,11 @@ export default function App() {
     setBusyAction(`${role}:${action}`);
     try {
       const result = await dispatchAction(action, role);
-      setResponse({ title: actionLabels[action] || "Success", detail: "Request completed successfully.", body: result });
-      toast({ title: "Action completed", description: actionLabels[action], status: "success", duration: 2200, isClosable: true });
+      setResponse({ title: actionLabels[action] || "Success", detail: "Request completed.", body: result });
+      toast({ title: actionLabels[action], status: "success", duration: 2000, isClosable: true, position: "bottom-right" });
     } catch (error) {
-      setResponse({ title: actionLabels[action] || "Request failed", detail: error.message, body: { error: error.message } });
-      toast({ title: "Request failed", description: error.message, status: "error", duration: 3200, isClosable: true });
+      setResponse({ title: "ERROR", detail: error.message, body: { error: error.message } });
+      toast({ title: "Failed", description: error.message, status: "error", duration: 3000, isClosable: true, position: "bottom-right" });
     } finally {
       setBusyAction("");
     }
@@ -116,7 +120,6 @@ export default function App() {
 
   async function dispatchAction(action, role) {
     if (action !== "load" && action !== "create" && !visitId) throw new Error("Visit ID is required");
-
     switch (action) {
       case "create":
         if (!form.vehicleNumber.trim()) throw new Error("Vehicle number is required");
@@ -127,170 +130,259 @@ export default function App() {
           mobileNumber: form.mobileNumber,
           status: "CheckedIn"
         });
-      case "acknowledge":
-        return parkingApi.acknowledge(role, visitId);
-      case "ready":
-        return parkingApi.markReady(role, visitId);
-      case "request":
-        return parkingApi.requestCheckout(role, visitId);
-      case "checkout":
-        return parkingApi.checkOut(role, visitId);
+      case "acknowledge": return parkingApi.acknowledge(role, visitId);
+      case "ready": return parkingApi.markReady(role, visitId);
+      case "request": return parkingApi.requestCheckout(role, visitId);
+      case "checkout": return parkingApi.checkOut(role, visitId);
       case "load": {
         const result = await parkingApi.loadVisits();
         setVisits(result.body?.data || []);
         return result;
       }
-      default:
-        throw new Error("Unknown action");
+      default: throw new Error("Unknown action");
     }
   }
 
   return (
-    <Box minH="100vh" bg={pageBg}>
-      <Box bg="linear-gradient(140deg, #0f172a, #1d4d57)" color="white">
-        <Container maxW="7xl" py={{ base: 8, md: 10 }}>
-          <Heading size={{ base: "xl", md: "2xl" }}>Parking Operations Dashboard</Heading>
-          <Text mt={2} color="whiteAlpha.800">
-            Clean role-based controls: user requests check-in/check-out, valet handles acceptance/ready, admin monitors all vehicles.
-          </Text>
+    <Box minH="100vh" bg={bg} fontFamily="'DM Mono', monospace">
+      {/* Header */}
+      <Box borderBottom="2px solid" borderColor="gray.900" bg="gray.900" color="white">
+        <Container maxW="7xl" py={5}>
+          <Flex align="center" justify="space-between">
+            <Box>
+              <HStack spacing={3} align="center">
+                <Box w="10px" h="10px" bg={selectedRole.accent} borderRadius="full" />
+                <Text fontSize="xs" letterSpacing="0.2em" color="gray.400" fontWeight="600">
+                  PARKING OPS
+                </Text>
+              </HStack>
+              <Heading
+                mt={1}
+                fontSize={{ base: "xl", md: "2xl" }}
+                fontWeight="800"
+                letterSpacing="-0.02em"
+                fontFamily="'DM Mono', monospace"
+              >
+                Operations Dashboard
+              </Heading>
+            </Box>
+            <Box
+              px={3}
+              py={1}
+              border="1px solid"
+              borderColor="gray.600"
+              borderRadius="md"
+              fontSize="xs"
+              letterSpacing="0.15em"
+              color="gray.400"
+            >
+              {selectedRole.tag}
+            </Box>
+          </Flex>
         </Container>
       </Box>
 
-      <Container maxW="7xl" mt={6} pb={12}>
+      <Container maxW="7xl" pt={8} pb={14}>
         <Stack spacing={6}>
-          <Box bg={panelBg} borderWidth="1px" borderColor={borderColor} borderRadius="2xl" boxShadow="xl" p={{ base: 4, md: 6 }}>
-            <Flex wrap="wrap" gap={3}>
-              {roleCards.map((role) => (
-                <Button
-                  key={role.key}
-                  onClick={() => setActiveRole(role.key)}
-                  leftIcon={<Icon as={role.icon} />}
-                  colorScheme={activeRole === role.key ? role.color : "gray"}
-                  variant={activeRole === role.key ? "solid" : "outline"}
-                >
-                  {role.title}
-                </Button>
-              ))}
-            </Flex>
 
-            <Box mt={4} bg={softPanelBg} borderWidth="1px" borderColor={borderColor} borderRadius="xl" p={4}>
-              <HStack spacing={3} align="start">
-                <Icon as={selectedRole.icon} boxSize={5} color={`${selectedRole.color}.500`} mt={1} />
-                <Box>
-                  <Heading size="sm">{selectedRole.title}</Heading>
-                  <Text color={mutedText} fontSize="sm" mt={1}>{selectedRole.description}</Text>
-                  <HStack spacing={2} mt={3} flexWrap="wrap">
-                    {selectedRole.permissions.map((permission) => (
-                      <Kbd key={permission}>{permission}</Kbd>
-                    ))}
-                  </HStack>
-                </Box>
-              </HStack>
-            </Box>
+          {/* Role Switcher */}
+          <Flex gap={0} borderRadius="lg" overflow="hidden" border="1.5px solid" borderColor={border} w="fit-content">
+            {roleCards.map((role, i) => (
+              <Box
+                key={role.key}
+                as="button"
+                onClick={() => setActiveRole(role.key)}
+                px={5}
+                py={3}
+                fontFamily="'DM Mono', monospace"
+                fontSize="xs"
+                letterSpacing="0.12em"
+                fontWeight="700"
+                transition="all 0.15s"
+                borderRight={i < roleCards.length - 1 ? "1.5px solid" : "none"}
+                borderColor={border}
+                bg={activeRole === role.key ? "gray.900" : "white"}
+                color={activeRole === role.key ? "white" : muted}
+                _hover={{ bg: activeRole === role.key ? "gray.900" : "gray.50" }}
+                display="flex"
+                alignItems="center"
+                gap={2}
+              >
+                <Box
+                  w="6px"
+                  h="6px"
+                  borderRadius="full"
+                  bg={activeRole === role.key ? role.accent : "gray.300"}
+                  flexShrink={0}
+                />
+                {role.title.toUpperCase()}
+              </Box>
+            ))}
+          </Flex>
+
+          {/* Role Description Strip */}
+          <Box
+            borderLeft="3px solid"
+            borderColor={selectedRole.accent}
+            pl={4}
+            py={1}
+          >
+            <Text fontSize="sm" color={muted}>{selectedRole.description}</Text>
+            <HStack spacing={2} mt={1.5} flexWrap="wrap">
+              {selectedRole.permissions.map((p) => (
+                <Text
+                  key={p}
+                  fontSize="xs"
+                  letterSpacing="0.1em"
+                  color={labelColor}
+                  border="1px solid"
+                  borderColor={border}
+                  px={2}
+                  py={0.5}
+                  borderRadius="sm"
+                >
+                  {p}
+                </Text>
+              ))}
+            </HStack>
           </Box>
 
-          <Grid templateColumns={{ base: "1fr", xl: "1.2fr 0.8fr" }} gap={6} alignItems="start">
+          {/* Main Grid */}
+          <Grid templateColumns={{ base: "1fr", xl: "1fr 420px" }} gap={6} alignItems="start">
             <GridItem>
-              <Stack spacing={6}>
-                {activeRole === "user" && (
-                  <Box bg={panelBg} borderWidth="1px" borderColor={borderColor} borderRadius="2xl" boxShadow="xl" p={{ base: 4, md: 6 }}>
-                    <Heading size="md">User Actions</Heading>
-                    <Text color={mutedText} mt={1}>Bring vehicle to lot and request check-in/check-out only.</Text>
-                    <SimpleGrid columns={{ base: 1, md: 3 }} spacing={4} mt={4}>
-                      <FormControl isRequired>
-                        <FormLabel>Vehicle number</FormLabel>
-                        <Input value={form.vehicleNumber} onChange={(event) => setForm({ ...form, vehicleNumber: event.target.value })} placeholder="TN01AB1234" />
-                      </FormControl>
-                      <FormControl isRequired>
-                        <FormLabel>Customer name</FormLabel>
-                        <Input value={form.customerName} onChange={(event) => setForm({ ...form, customerName: event.target.value })} placeholder="John" />
-                      </FormControl>
-                      <FormControl>
-                        <FormLabel>Mobile number</FormLabel>
-                        <Input value={form.mobileNumber} onChange={(event) => setForm({ ...form, mobileNumber: event.target.value })} placeholder="9876543210" />
-                      </FormControl>
-                    </SimpleGrid>
-                    <Button mt={4} leftIcon={<Icon as={CarFront} />} colorScheme="blue" isLoading={busyAction === "user:create"} onClick={() => runAction("create", "user")}>
-                      Request Check-In
-                    </Button>
+              {/* USER PANEL */}
+              {activeRole === "user" && (
+                <PanelCard accent={selectedRole.accent} cardBg={cardBg} border={border}>
+                  <SectionLabel>Check-In</SectionLabel>
+                  <SimpleGrid columns={{ base: 1, md: 3 }} spacing={4} mt={4}>
+                    <FieldInput label="Vehicle No." value={form.vehicleNumber} onChange={(e) => setForm({ ...form, vehicleNumber: e.target.value })} placeholder="TN01AB1234" required />
+                    <FieldInput label="Customer Name" value={form.customerName} onChange={(e) => setForm({ ...form, customerName: e.target.value })} placeholder="John" required />
+                    <FieldInput label="Mobile" value={form.mobileNumber} onChange={(e) => setForm({ ...form, mobileNumber: e.target.value })} placeholder="9876543210" />
+                  </SimpleGrid>
+                  <ActionButton
+                    mt={5}
+                    accent={selectedRole.accent}
+                    icon={CarFront}
+                    isLoading={busyAction === "user:create"}
+                    onClick={() => runAction("create", "user")}
+                  >
+                    Request Check-In
+                  </ActionButton>
 
-                    <Divider my={5} />
+                  <Divider my={6} borderColor={border} />
 
-                    <FormControl isRequired>
-                      <FormLabel>Visit ID</FormLabel>
-                      <Input value={visitId} onChange={(event) => setVisitId(event.target.value)} type="number" min="1" placeholder="101" />
-                    </FormControl>
-                    <Button mt={4} leftIcon={<Icon as={BellRing} />} variant="outline" colorScheme="blue" isLoading={busyAction === "user:request"} onClick={() => runAction("request", "user")}>
-                      Request Check-Out
-                    </Button>
+                  <SectionLabel>Check-Out Request</SectionLabel>
+                  <Box mt={4} maxW="260px">
+                    <FieldInput label="Visit ID" value={visitId} onChange={(e) => setVisitId(e.target.value)} placeholder="101" type="number" required />
                   </Box>
-                )}
+                  <ActionButton
+                    mt={4}
+                    accent={selectedRole.accent}
+                    icon={BellRing}
+                    variant="outline"
+                    isLoading={busyAction === "user:request"}
+                    onClick={() => runAction("request", "user")}
+                  >
+                    Request Check-Out
+                  </ActionButton>
+                </PanelCard>
+              )}
 
-                {activeRole === "valet" && (
-                  <Box bg={panelBg} borderWidth="1px" borderColor={borderColor} borderRadius="2xl" boxShadow="xl" p={{ base: 4, md: 6 }}>
-                    <Heading size="md">Valet Actions</Heading>
-                    <Text color={mutedText} mt={1}>Accept request and make vehicle ready for check-out.</Text>
-                    <FormControl isRequired mt={4}>
-                      <FormLabel>Visit ID</FormLabel>
-                      <Input value={visitId} onChange={(event) => setVisitId(event.target.value)} type="number" min="1" placeholder="101" />
-                    </FormControl>
-                    <HStack mt={4} spacing={3} flexWrap="wrap">
-                      <Button leftIcon={<Icon as={BadgeCheck} />} colorScheme="teal" isLoading={busyAction === "valet:acknowledge"} onClick={() => runAction("acknowledge", "valet")}>
-                        Acknowledge
-                      </Button>
-                      <Button leftIcon={<Icon as={CheckCircle2} />} variant="outline" colorScheme="teal" isLoading={busyAction === "valet:ready"} onClick={() => runAction("ready", "valet")}>
-                        Mark Ready
-                      </Button>
-                      <Button leftIcon={<Icon as={CarFront} />} variant="outline" colorScheme="blue" isLoading={busyAction === "valet:checkout"} onClick={() => runAction("checkout", "valet")}>
-                        Accept Checkout
-                      </Button>
-                    </HStack>
+              {/* VALET PANEL */}
+              {activeRole === "valet" && (
+                <PanelCard accent={selectedRole.accent} cardBg={cardBg} border={border}>
+                  <SectionLabel>Visit Actions</SectionLabel>
+                  <Box mt={4} maxW="260px">
+                    <FieldInput label="Visit ID" value={visitId} onChange={(e) => setVisitId(e.target.value)} placeholder="101" type="number" required />
                   </Box>
-                )}
+                  <HStack mt={5} spacing={3} flexWrap="wrap">
+                    <ActionButton accent={selectedRole.accent} icon={BadgeCheck} isLoading={busyAction === "valet:acknowledge"} onClick={() => runAction("acknowledge", "valet")}>
+                      Acknowledge
+                    </ActionButton>
+                    <ActionButton accent={selectedRole.accent} icon={CheckCircle2} variant="outline" isLoading={busyAction === "valet:ready"} onClick={() => runAction("ready", "valet")}>
+                      Mark Ready
+                    </ActionButton>
+                    <ActionButton accent={selectedRole.accent} icon={CarFront} variant="outline" isLoading={busyAction === "valet:checkout"} onClick={() => runAction("checkout", "valet")}>
+                      Accept Checkout
+                    </ActionButton>
+                  </HStack>
+                </PanelCard>
+              )}
 
-                {activeRole === "admin" && (
-                  <Box bg={panelBg} borderWidth="1px" borderColor={borderColor} borderRadius="2xl" boxShadow="xl" p={{ base: 4, md: 6 }}>
-                    <Flex justify="space-between" align="center" gap={3}>
-                      <Box>
-                        <Heading size="md">Admin Monitoring</Heading>
-                        <Text color={mutedText} mt={1}>List of current checked-in vehicles and all entered/exited vehicles.</Text>
-                      </Box>
-                      <Button size="sm" leftIcon={<Icon as={ClipboardList} />} colorScheme="orange" isLoading={busyAction === "admin:load"} onClick={() => runAction("load", "admin")}>
-                        Refresh
-                      </Button>
-                    </Flex>
-
-                    <SimpleGrid columns={{ base: 1, md: 2 }} spacing={4} mt={5}>
-                      <ListPanel
-                        title="Current Checked-In Vehicles"
-                        subtitle="Vehicles currently in lot"
-                        visits={activeVehicles}
-                        borderColor={borderColor}
-                        mutedText={mutedText}
-                      />
-                      <ListPanel
-                        title="Entered & Exited History"
-                        subtitle="Complete visit history"
-                        visits={historyVehicles}
-                        borderColor={borderColor}
-                        mutedText={mutedText}
-                      />
-                    </SimpleGrid>
-                  </Box>
-                )}
-              </Stack>
+              {/* ADMIN PANEL */}
+              {activeRole === "admin" && (
+                <PanelCard accent={selectedRole.accent} cardBg={cardBg} border={border}>
+                  <Flex justify="space-between" align="center">
+                    <SectionLabel>Vehicle Monitor</SectionLabel>
+                    <ActionButton
+                      accent={selectedRole.accent}
+                      icon={RefreshCw}
+                      size="sm"
+                      isLoading={busyAction === "admin:load"}
+                      onClick={() => runAction("load", "admin")}
+                    >
+                      Refresh
+                    </ActionButton>
+                  </Flex>
+                  <SimpleGrid columns={{ base: 1, md: 2 }} spacing={4} mt={5}>
+                    <VehicleList
+                      title="Currently In Lot"
+                      visits={activeVehicles}
+                      border={border}
+                      muted={muted}
+                    />
+                    <VehicleList
+                      title="Full History"
+                      visits={historyVehicles}
+                      border={border}
+                      muted={muted}
+                    />
+                  </SimpleGrid>
+                </PanelCard>
+              )}
             </GridItem>
 
+            {/* Response Panel */}
             <GridItem>
-              <Box bg={panelBg} borderWidth="1px" borderColor={borderColor} borderRadius="2xl" boxShadow="xl" p={6}>
-                <Flex justify="space-between" align="start" gap={3} mb={4}>
-                  <Box>
-                    <Heading size="md">Live response</Heading>
-                    <Text color={mutedText} fontSize="sm">API payload and status for the current role action.</Text>
-                  </Box>
-                  <Kbd>API</Kbd>
+              <Box
+                bg="gray.950"
+                border="1.5px solid"
+                borderColor="gray.800"
+                borderRadius="xl"
+                overflow="hidden"
+              >
+                <Flex
+                  px={5}
+                  py={3}
+                  borderBottom="1px solid"
+                  borderColor="gray.800"
+                  align="center"
+                  justify="space-between"
+                >
+                  <HStack spacing={2}>
+                    <Box w="8px" h="8px" bg="green.400" borderRadius="full" />
+                    <Text fontSize="xs" letterSpacing="0.15em" color="gray.500" fontFamily="'DM Mono', monospace">
+                      LIVE RESPONSE
+                    </Text>
+                  </HStack>
+                  <Text fontSize="xs" color="gray.600" fontFamily="'DM Mono', monospace">
+                    {selectedRole.tag}
+                  </Text>
                 </Flex>
-                <Textarea value={responseText} readOnly minH="300px" fontFamily="mono" fontSize="sm" bg="gray.950" color="green.100" borderColor="transparent" resize="vertical" />
+                <Textarea
+                  value={responseText}
+                  readOnly
+                  minH="360px"
+                  fontFamily="'DM Mono', monospace"
+                  fontSize="xs"
+                  bg="transparent"
+                  color="green.300"
+                  border="none"
+                  resize="vertical"
+                  p={5}
+                  lineHeight="1.7"
+                  _focus={{ boxShadow: "none" }}
+                />
               </Box>
             </GridItem>
           </Grid>
@@ -300,26 +392,119 @@ export default function App() {
   );
 }
 
-function ListPanel({ title, subtitle, visits, borderColor, mutedText }) {
+/* ── Sub-components ────────────────────────────────────────── */
+
+function PanelCard({ accent, cardBg, border, children }) {
   return (
-    <Box borderWidth="1px" borderColor={borderColor} borderRadius="xl" p={4}>
-      <Heading size="sm">{title}</Heading>
-      <Text color={mutedText} fontSize="sm" mt={1}>{subtitle}</Text>
-      <VStack align="stretch" spacing={3} mt={4}>
+    <Box
+      bg={cardBg}
+      border="1.5px solid"
+      borderColor={border}
+      borderRadius="xl"
+      borderTop="3px solid"
+      borderTopColor={accent}
+      p={{ base: 5, md: 7 }}
+    >
+      {children}
+    </Box>
+  );
+}
+
+function SectionLabel({ children }) {
+  return (
+    <Text
+      fontSize="xs"
+      letterSpacing="0.18em"
+      fontWeight="700"
+      color="gray.400"
+      fontFamily="'DM Mono', monospace"
+    >
+      {children}
+    </Text>
+  );
+}
+
+function FieldInput({ label, required, ...props }) {
+  return (
+    <FormControl isRequired={required}>
+      <FormLabel
+        fontSize="xs"
+        letterSpacing="0.1em"
+        fontWeight="600"
+        color="gray.400"
+        fontFamily="'DM Mono', monospace"
+        mb={1.5}
+      >
+        {label}
+      </FormLabel>
+      <Input
+        {...props}
+        size="md"
+        borderRadius="lg"
+        borderColor="gray.200"
+        fontFamily="'DM Mono', monospace"
+        fontSize="sm"
+        _focus={{ borderColor: "gray.400", boxShadow: "none" }}
+        _placeholder={{ color: "gray.300" }}
+      />
+    </FormControl>
+  );
+}
+
+function ActionButton({ accent, icon, children, variant = "solid", size = "md", ...props }) {
+  const isSolid = variant === "solid";
+  return (
+    <Button
+      {...props}
+      size={size}
+      leftIcon={<Icon as={icon} boxSize={size === "sm" ? 3.5 : 4} />}
+      fontFamily="'DM Mono', monospace"
+      fontSize="xs"
+      letterSpacing="0.08em"
+      fontWeight="700"
+      borderRadius="lg"
+      transition="all 0.15s"
+      bg={isSolid ? accent : "transparent"}
+      color={isSolid ? "white" : accent}
+      border="1.5px solid"
+      borderColor={accent}
+      _hover={{
+        bg: isSolid ? accent : `${accent}15`,
+        opacity: isSolid ? 0.88 : 1
+      }}
+      _active={{ transform: "scale(0.97)" }}
+    >
+      {children}
+    </Button>
+  );
+}
+
+function VehicleList({ title, visits, border, muted }) {
+  return (
+    <Box border="1.5px solid" borderColor={border} borderRadius="lg" overflow="hidden">
+      <Box px={4} py={3} borderBottom="1px solid" borderColor={border} bg="gray.50">
+        <Text fontSize="xs" letterSpacing="0.15em" fontWeight="700" color="gray.500" fontFamily="'DM Mono', monospace">
+          {title.toUpperCase()}
+        </Text>
+      </Box>
+      <VStack align="stretch" spacing={0} divider={<Divider borderColor={border} />}>
         {visits.length === 0 ? (
-          <Text color={mutedText}>No vehicles in this list.</Text>
+          <Box px={4} py={5}>
+            <Text color={muted} fontSize="sm" fontFamily="'DM Mono', monospace">— empty —</Text>
+          </Box>
         ) : (
           visits.map((visit) => (
-            <Box key={visit.id} borderWidth="1px" borderColor={borderColor} borderRadius="lg" p={3}>
-              <Flex justify="space-between" align="start" gap={2}>
+            <Box key={visit.id} px={4} py={3}>
+              <Flex justify="space-between" align="center" gap={2}>
                 <Box>
-                  <Text fontWeight="700">{visit.vehicleNumber}</Text>
-                  <Text color={mutedText} fontSize="sm">{visit.customerName}</Text>
+                  <Text fontWeight="700" fontSize="sm" fontFamily="'DM Mono', monospace">{visit.vehicleNumber}</Text>
+                  <Text color={muted} fontSize="xs" mt={0.5}>{visit.customerName}</Text>
                 </Box>
-                <Badge colorScheme={statusColor(visit.status)}>{visit.status}</Badge>
+                <StatusBadge status={visit.status} />
               </Flex>
-              <Text mt={2} color={mutedText} fontSize="sm">Visit #{visit.id}</Text>
-              <Text color={mutedText} fontSize="sm">Entry: {visit.createdAt || "n/a"}</Text>
+              <Text mt={1.5} color={muted} fontSize="xs" fontFamily="'DM Mono', monospace">
+                #{visit.id} · {visit.createdAt || "n/a"}
+              </Text>
             </Box>
           ))
         )}
@@ -328,19 +513,30 @@ function ListPanel({ title, subtitle, visits, borderColor, mutedText }) {
   );
 }
 
-function statusColor(status) {
-  switch (status) {
-    case "CheckedIn":
-      return "blue";
-    case "Requested":
-      return "purple";
-    case "InProgress":
-      return "orange";
-    case "Ready":
-      return "teal";
-    case "CheckedOut":
-      return "green";
-    default:
-      return "gray";
-  }
+function StatusBadge({ status }) {
+  const map = {
+    CheckedIn: { color: "#2563eb", label: "IN" },
+    Requested: { color: "#7c3aed", label: "REQ" },
+    InProgress: { color: "#d97706", label: "PROG" },
+    Ready: { color: "#0d9488", label: "READY" },
+    CheckedOut: { color: "#16a34a", label: "OUT" }
+  };
+  const s = map[status] || { color: "#6b7280", label: status };
+  return (
+    <Box
+      px={2}
+      py={0.5}
+      borderRadius="sm"
+      fontSize="10px"
+      fontWeight="800"
+      letterSpacing="0.12em"
+      fontFamily="'DM Mono', monospace"
+      bg={`${s.color}18`}
+      color={s.color}
+      border="1px solid"
+      borderColor={`${s.color}40`}
+    >
+      {s.label}
+    </Box>
+  );
 }
