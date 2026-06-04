@@ -1,0 +1,127 @@
+openapi: 3.0.3
+
+info:
+  title: Parking Visit Management API
+  description: APIs for managing parking visits and valet operations
+  version: 1.0.0
+
+servers:
+  - url: http://localhost:9000
+POST /api/visits
+paths:
+  /api/visits:
+    post:
+      summary: Create a parking visit
+
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateVisitRequest'
+
+      responses:
+        '201':
+          description: Visit created successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/VisitResponse'
+POST /api/visits/{id}/acknowledge
+  /api/visits/{id}/acknowledge:
+    post:
+      summary: Acknowledge a visit
+
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+
+      responses:
+        '200':
+          description: Visit acknowledged successfully
+POST /api/visits/{id}/ready
+  /api/visits/{id}/ready:
+    post:
+      summary: Mark vehicle as ready
+
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+
+      responses:
+        '200':
+          description: Vehicle marked as ready
+POST /api/visits/{id}/addon
+  /api/visits/{id}/addon:
+    post:
+      summary: Add additional services
+
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+
+      responses:
+        '200':
+          description: Add-on service added
+POST /api/visits/{id}/checkout
+  /api/visits/{id}/checkout:
+    post:
+      summary: Checkout vehicle
+
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+
+      responses:
+        '200':
+          description: Vehicle checked out successfully
+components:
+  schemas:
+
+    CreateVisitRequest:
+      type: object
+
+      required:
+        - vehicleNumber
+        - customerName
+
+      properties:
+        vehicleNumber:
+          type: string
+          example: TN01AB1234
+
+        customerName:
+          type: string
+          example: Sanjana
+
+    VisitResponse:
+      type: object
+
+      properties:
+        visitId:
+          type: integer
+          example: 101
+
+        vehicleNumber:
+          type: string
+          example: TN01AB1234
+
+        customerName:
+          type: string
+          example: Sanjana
+
+        status:
+          type: string
+          example: REQUESTED
