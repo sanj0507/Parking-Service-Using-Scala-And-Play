@@ -65,6 +65,17 @@ export const parkingApi = {
       method: "POST",
       body: JSON.stringify({ service })
     }),
+  getAddOns: (role, id) => apiRequest(role, `/visits/${id}/add-ons`),
+  startAddOn: (role, id, service) =>
+    apiRequest(role, `/visits/${id}/add-ons/start`, {
+      method: "POST",
+      body: JSON.stringify({ service })
+    }),
+  completeAddOn: (role, id, service) =>
+    apiRequest(role, `/visits/${id}/add-ons/complete`, {
+      method: "POST",
+      body: JSON.stringify({ service })
+    }),
   checkOut: (role, id) =>
     apiRequest(role, `/visits/${id}/check-out`, { method: "POST" })
 };

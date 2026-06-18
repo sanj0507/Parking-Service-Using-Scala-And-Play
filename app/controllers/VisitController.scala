@@ -47,7 +47,7 @@ class VisitController @Inject()(
 
       visitService.checkIn(visit).map { _ =>
         Created(Json.obj(
-          "message" -> "Vehicle checked in successfully"
+          "message" -> "Check-in request created successfully"
         ))
       }.recover {
         case ex: Exception =>
@@ -137,7 +137,7 @@ class VisitController @Inject()(
     } else {
       visitService.acknowledgeRequest(id).map { _ =>
         Ok(Json.obj(
-          "message" -> s"Vehicle request acknowledged successfully for visit $id"
+          "message" -> s"Vehicle request approved successfully for visit $id"
         ))
       }.recover {
         case ex: Exception =>
@@ -177,6 +177,68 @@ class VisitController @Inject()(
       val serviceName = (json \ "service").as[String]
 
       visitService.addOn(id, serviceName).map { message =>
+        Ok(Json.obj(
+          "message" -> message
+        ))
+      }.recover {
+        case ex: Exception =>
+          BadRequest(Json.obj(
+            "error" -> ex.getMessage
+          ))
+      }
+    }
+  }
+
+  def getAddOns(id: Long) = roleAction.async { request =>
+    if (request.role.isEmpty) {
+      unauthorized
+    } else if (!allowed(request.role, Set(Role.Valet, Role.ServiceAdvisor, Role.Admin))) {
+      forbidden
+    } else {
+      visitService.getAddOns(id).map { addOns =>
+        Ok(Json.obj(
+          "count" -> addOns.size,
+          "data" -> addOns
+        ))
+      }.recover {
+        case ex: Exception =>
+          BadRequest(Json.obj(
+            "error" -> ex.getMessage
+          ))
+      }
+    }
+  }
+
+  def startAddOn(id: Long) = roleAction.async(parse.json) { request =>
+    if (request.role.isEmpty) {
+      unauthorized
+    } else if (!allowed(request.role, Set(Role.Valet, Role.Admin))) {
+      forbidden
+    } else {
+      val serviceName = (request.body \ "service").as[String]
+
+      visitService.startAddOn(id, serviceName).map { message =>
+        Ok(Json.obj(
+          "message" -> message
+        ))
+      }.recover {
+        case ex: Exception =>
+          BadRequest(Json.obj(
+            "error" -> ex.getMessage
+          ))
+      }
+    }
+  }
+
+  def completeAddOn(id: Long) = roleAction.async(parse.json) { request =>
+    if (request.role.isEmpty) {
+      unauthorized
+    } else if (!allowed(request.role, Set(Role.Valet, Role.Admin))) {
+      forbidden
+    } else {
+      val serviceName = (request.body \ "service").as[String]
+
+      visitService.completeAddOn(id, serviceName).map { message =>
         Ok(Json.obj(
           "message" -> message
         ))

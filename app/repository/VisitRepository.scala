@@ -1,7 +1,7 @@
 package repository
 
 import javax.inject._
-import models.Visit
+import models.{AddOnRequest, Visit}
 import play.api.db.slick.DatabaseConfigProvider
 import slick.jdbc.MySQLProfile
 import slick.jdbc.MySQLProfile.api._
@@ -28,10 +28,27 @@ class VisitRepository @Inject()(
       (id, vehicleNumber, customerName, status, createdAt) <> ((Visit.apply _).tupled, Visit.unapply)
   }
 
+  class AddOnRequestsTable(tag: Tag)
+      extends Table[AddOnRequest](tag, "add_on_requests") {
+
+    def id = column[Long]("id", O.PrimaryKey, O.AutoInc)
+    def visitId = column[Long]("visit_id")
+    def serviceName = column[String]("service_name")
+    def status = column[String]("status")
+    def createdAt = column[String]("created_at")
+
+    def * =
+      (id, visitId, serviceName, status, createdAt) <> ((AddOnRequest.apply _).tupled, AddOnRequest.unapply)
+  }
+
   private val visits = TableQuery[VisitsTable]
+  private val addOnRequests = TableQuery[AddOnRequestsTable]
 
   def createTable(): Future[Unit] =
-    db.run(visits.schema.createIfNotExists)
+    db.run(DBIO.seq(
+      visits.schema.createIfNotExists,
+      addOnRequests.schema.createIfNotExists
+    ))
 
   def insert(visit: Visit): Future[Int] =
     db.run(visits += visit)
@@ -48,6 +65,29 @@ class VisitRepository @Inject()(
         .filter(_.id === id)
         .map(_.status)
         .update(status)
+    )
+
+  def insertAddOn(addOnRequest: AddOnRequest): Future[Int] =
+    db.run(addOnRequests += addOnRequest)
+
+  def getAddOnsByVisitId(visitId: Long): Future[Seq[AddOnRequest]] =
+    db.run(addOnRequests.filter(_.visitId === visitId).result)
+
+  def updateAddOnStatus(
+      visitId: Long,
+      serviceName: String,
+      expectedStatus: String,
+      nextStatus: String
+  ): Future[Int] =
+    db.run(
+      addOnRequests
+        .filter(addOn =>
+          addOn.visitId === visitId &&
+          addOn.serviceName === serviceName &&
+          addOn.status === expectedStatus
+        )
+        .map(_.status)
+        .update(nextStatus)
     )
 
   def findActiveVisitByVehicle(vehicleNumber: String): Future[Option[Visit]] =

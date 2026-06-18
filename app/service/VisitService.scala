@@ -3,7 +3,7 @@ package service
 import java.time.LocalDateTime
 import java.time.format.DateTimeFormatter
 import javax.inject._
-import models.Visit
+import models.{AddOnRequest, AddOnStatus, Visit}
 import repository.VisitRepository
 
 import scala.concurrent.ExecutionContext
@@ -32,7 +32,10 @@ class VisitService @Inject()(
           val currentTime = LocalDateTime.now()
             .format(DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss"))
 
-          val updatedVisit = visit.copy(createdAt = currentTime)
+          val updatedVisit = visit.copy(
+            status = models.VisitStatus.RequestedCheckIn,
+            createdAt = currentTime
+          )
           repo.insert(updatedVisit)
       }
     }
@@ -61,12 +64,26 @@ class VisitService @Inject()(
     )
 
   def acknowledgeRequest(id: Long): Future[Int] =
-    updateVisitStatus(
-      id = id,
-      expectedStatus = models.VisitStatus.Requested,
-      nextStatus = models.VisitStatus.InProgress,
-      errorMessage = "Vehicle can only be acknowledged from Requested status"
-    )
+    repo.getById(id).flatMap {
+      case Some(visit) =>
+        visit.status match {
+          case models.VisitStatus.RequestedCheckIn =>
+            repo.updateStatus(id, models.VisitStatus.CheckedIn)
+
+          case models.VisitStatus.Requested =>
+            repo.updateStatus(id, models.VisitStatus.InProgress)
+
+          case _ =>
+            Future.failed(
+              new Exception(
+                "Vehicle can only be acknowledged from RequestedCheckIn or Requested status"
+              )
+            )
+        }
+
+      case None =>
+        Future.failed(new Exception(s"Visit with id $id not found"))
+    }
 
   def acceptCheckoutRequest(id: Long): Future[Int] =
     updateVisitStatus(
@@ -77,30 +94,75 @@ class VisitService @Inject()(
     )
 
   def markReady(id: Long): Future[Int] =
-    updateVisitStatus(
-      id = id,
-      expectedStatus = models.VisitStatus.InProgress,
-      nextStatus = models.VisitStatus.Ready,
-      errorMessage = "Vehicle can only be marked ready from InProgress status"
-    )
-
-  def addOn(id: Long, serviceName: String): Future[String] = {
     repo.getById(id).flatMap {
       case Some(visit) =>
-        if (serviceName.trim.isEmpty) {
+        visit.status match {
+          case models.VisitStatus.CheckedIn | models.VisitStatus.InProgress =>
+            repo.updateStatus(id, models.VisitStatus.Ready)
+
+          case _ =>
+            Future.failed(
+              new Exception(
+                "Vehicle can only be marked ready after it is checked in"
+              )
+            )
+        }
+
+      case None =>
+        Future.failed(new Exception(s"Visit with id $id not found"))
+    }
+
+  def addOn(id: Long, serviceName: String): Future[String] = {
+    val normalizedServiceName = serviceName.trim
+
+    repo.getById(id).flatMap {
+      case Some(visit) =>
+        if (normalizedServiceName.isEmpty) {
           Future.failed(new Exception("Service name is required"))
         } else if (visit.status == models.VisitStatus.CheckedOut) {
           Future.failed(new Exception("Cannot add services after check-out"))
         } else {
-          Future.successful(
-            s"Add-on service '$serviceName' recorded for visit $id"
-          )
+          val currentTime = LocalDateTime.now()
+            .format(DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss"))
+
+          repo.insertAddOn(
+            AddOnRequest(
+              visitId = id,
+              serviceName = normalizedServiceName,
+              status = AddOnStatus.Requested,
+              createdAt = currentTime
+            )
+          ).map(_ => s"Add-on service '$normalizedServiceName' requested for visit $id")
         }
 
       case None =>
         Future.failed(new Exception(s"Visit with id $id not found"))
     }
   }
+
+  def getAddOns(id: Long): Future[Seq[AddOnRequest]] =
+    repo.getById(id).flatMap {
+      case Some(_) => repo.getAddOnsByVisitId(id)
+      case None    => Future.failed(new Exception(s"Visit with id $id not found"))
+    }
+
+  def startAddOn(id: Long, serviceName: String): Future[String] =
+    updateAddOnStatus(
+      id = id,
+      serviceName = serviceName,
+      expectedStatus = AddOnStatus.Requested,
+      nextStatus = AddOnStatus.InProgress,
+      errorMessage = "Add-on can only be started from RequestedAddOn status"
+    )
+
+  def completeAddOn(id: Long, serviceName: String): Future[String] =
+    updateAddOnStatus(
+      id = id,
+      serviceName = serviceName,
+      expectedStatus = AddOnStatus.InProgress,
+      nextStatus = AddOnStatus.Completed,
+      errorMessage = "Add-on can only be completed from AddOnInProgress status"
+    )
 
   def checkOut(id: Long): Future[Int] =
     acceptCheckoutRequest(id)
@@ -121,6 +183,33 @@ class VisitService @Inject()(
 
       case None =>
         Future.failed(new Exception(s"Visit with id $id not found"))
+    }
+  }
+
+  private def updateAddOnStatus(
+      id: Long,
+      serviceName: String,
+      expectedStatus: String,
+      nextStatus: String,
+      errorMessage: String
+  ): Future[String] = {
+    val normalizedServiceName = serviceName.trim
+
+    if (normalizedServiceName.isEmpty) {
+      Future.failed(new Exception("Service name is required"))
+    } else {
+      repo.updateAddOnStatus(
+        visitId = id,
+        serviceName = normalizedServiceName,
+        expectedStatus = expectedStatus,
+        nextStatus = nextStatus
+      ).flatMap {
+        case updated if updated > 0 =>
+          Future.successful(s"Add-on service '$normalizedServiceName' moved to $nextStatus for visit $id")
+
+        case _ =>
+          Future.failed(new Exception(errorMessage))
+      }
     }
   }
   
