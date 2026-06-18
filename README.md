@@ -1,396 +1,206 @@
-# Parking Visit & Valet Management API
+# Full-Stack Parking Visit & Valet Management System
 
-A REST API backend built using Play Framework, Scala, Slick ORM, MySQL, and Docker for managing parking visits and valet workflows.
-
-The system supports:
-- Vehicle check-in and check-out
-- Valet workflow tracking
-- Visit status management
-- Add-on parking services
-- Activity workflow transitions
-- Dockerized deployment
+A robust, full-stack application for managing valet parking check-ins, retrieval workflows, and add-on services. This project features a high-performance **Scala + Play Framework REST API** backend, and dual frontend options: a built-in server-rendered dashboard and a modern **React + Vite + Chakra UI** console.
 
 ---
 
-# Tech Stack
+## Key Features
 
-- Scala
-- Play Framework
-- Slick ORM
-- MySQL
-- Docker
-- Docker Compose
-- SBT
+1. **Role-Based Access Control**:
+   - **Service Advisor (User)**: Manages check-ins, requests vehicle retrieval, requests checkout, and logs add-on services.
+   - **Valet Attendant**: Acknowledges retrieval requests, processes vehicles, executes/tracks add-on services, and marks vehicles ready.
+   - **Admin**: Supervises all active visits, tracks histories, and runs administrative controls.
+2. **Visit Status Lifecycle**:
+   - `CheckedIn` ➔ `Requested` ➔ `InProgress` (Acknowledged) ➔ `Ready` (Ready for pickup) ➔ `CheckedOut`
+3. **Add-on Services Tracking**:
+   - Real-time management of extra tasks like `Car Wash` and `Priority Parking` with statuses: `Pending` ➔ `InProgress` ➔ `Completed`.
+4. **Dual Frontend Options**:
+   - A built-in SSR server dashboard.
+   - An interactive React single-page console with Chakra UI theme and animations.
 
 ---
 
-# Project Architecture
+## Tech Stack
+
+### Backend
+- **Scala** & **Play Framework** (MVC REST API)
+- **Slick ORM** for database mapping
+- **MySQL** database
+- **Role-based Authorization Action** via custom request headers
+
+### Frontend
+- **React 18**
+- **Vite** (build tool and dev server with proxy support)
+- **Chakra UI** & **Emotion** (for styling and layouts)
+- **Framer Motion** (micro-animations)
+
+---
+
+## Project Structure
 
 ```text
-Controller → Service → Repository → MySQL
+├── app/
+│   ├── actions/         # Custom Play Actions (e.g., Role-based request filtering)
+│   ├── controllers/     # REST API Controllers (HomeController, VisitController)
+│   ├── models/          # Slick model definitions (Visit, AddOnRequest, Role)
+│   ├── repository/      # Slick Database queries (VisitRepository)
+│   └── views/           # Scala HTML templates (Built-in server-side frontend)
+├── conf/
+│   ├── application.conf # Backend configuration (DB source, ports, CSRF)
+│   └── routes           # Play Framework HTTP route definitions
+├── src/                 # React frontend source files
+│   ├── api/             # API client integrations
+│   ├── App.jsx          # Main React Application
+│   ├── main.jsx         # React application entry point
+│   └── theme.js         # Chakra UI theme customizations
+├── public/              # Static assets for the Scala templates
+├── Dockerfile           # Docker configuration for backend
+├── docker-compose.yaml  # Docker Compose configuration for backend & MySQL database
+└── package.json         # Node.js frontend configuration
 ```
 
-## Layers
+---
 
-| Layer | Responsibility |
-|---|---|
-| Controller | Handles API requests/responses |
-| Service | Business logic |
-| Repository | Database access |
-| MySQL | Persistent storage |
+## Database Schema
+
+The database relies on a two-table relational structure defined in `app/repository/VisitRepository.scala`:
+
+### 1. `visits` Table
+Holds core data for each parking visit.
+
+| Column | Type | Attributes | Description |
+|---|---|---|---|
+| `id` | `Long` | Primary Key, Auto-increment | Visit Identifier |
+| `vehicle_number` | `String` | Non-null | Vehicle license plate number |
+| `customer_name` | `String` | Non-null | Owner of the vehicle |
+| `status` | `String` | Non-null | Current visit status (e.g., `CheckedIn`, `Requested`, `Ready`) |
+| `created_at` | `String` | Non-null | Date/time of check-in |
+
+### 2. `add_on_requests` Table
+Tracks secondary services attached to a specific visit.
+
+| Column | Type | Attributes | Description |
+|---|---|---|---|
+| `id` | `Long` | Primary Key, Auto-increment | Request Identifier |
+| `visit_id` | `Long` | Foreign Key (visits) | Reference to the associated visit |
+| `service_name` | `String` | Non-null | Name of the service (e.g., `Car Wash`) |
+| `status` | `String` | Non-null | Service status (`Pending`, `InProgress`, `Completed`) |
+| `created_at` | `String` | Non-null | Date/time the service was requested |
 
 ---
 
-# Features
+## Getting Started
 
-## Parking Visit Management
-
-- Vehicle Check-In
-- Vehicle Check-Out
-- Get Visit Details
-- Get All Visits
-
-## Valet Workflow
-
-- Customer requests vehicle
-- Attendant acknowledges request
-- Vehicle marked ready
-- Customer checks out vehicle
-
-## Status Tracking
-
-Supports complete valet lifecycle:
-
-```text
-CheckedIn
-   ↓
-Requested
-   ↓
-InProgress
-   ↓
-Ready
-   ↓
-CheckedOut
-```
-
-## Add-On Services
-
-- Car Wash
-- Priority Parking
-- Additional valet services
+### Prerequisites
+- **Java 17**
+- **Node.js** (v18 or higher)
+- **SBT** (Scala Build Tool)
+- **Docker & Docker Compose** (optional)
 
 ---
 
-# Docker Setup
+## Run with Docker
 
-## Prerequisites
-
-Install:
-- Docker Desktop
-- Docker Compose
-
----
-
-# Run Using Docker
-
-## Build and Start Containers
+This builds the Play application and runs a MySQL instance inside Docker containers.
 
 ```bash
+# Build and run containers
 docker-compose up --build
-```
 
-## Run in Background
-
-```bash
+# Run in background (detached mode)
 docker-compose up -d --build
-```
 
-## Stop Containers
-
-```bash
+# Stop the containers
 docker-compose down
 ```
-
-## View Backend Logs
-
-```bash
-docker-compose logs -f backend
-```
-
-## View MySQL Logs
-
-```bash
-docker-compose logs -f mysql
-```
+- **Backend API**: available at `http://localhost:9000`
+- **Database**: running on port `3307` (mapped from `3306` inside container)
 
 ---
 
-# Services
+## Local Development Setup
 
-| Service | Container | Port |
-|---|---|---|
-| Backend | valet_backend | 9000 |
-| MySQL | valet_mysql | 3307 |
+If you prefer to run the backend and frontend separately for development:
 
----
-
-# API Base URL
-
-```text
-http://localhost:9000
-```
-
----
-
-# API Endpoints
-
-# Health Check
-
-## GET /hello
-
-Returns test response.
-
----
-
-# Parking Visit APIs
-
-## 1. Check-In Vehicle
-
-### POST /check-in
-
-### Request Body
-
-```json
-{
-  "vehicleNumber": "KA01AB1234",
-  "customerName": "Alice",
-  "status": "CheckedIn"
+### 1. Set Up Database
+Ensure MySQL is running on your machine, create a database named `parking_db`, and configure the credentials in `conf/application.conf`:
+```hocon
+slick.dbs.default.db {
+  url = "jdbc:mysql://localhost:3306/parking_db"
+  user = "root"
+  password = "your_password"
 }
 ```
 
----
-
-## 2. Get All Visits
-
-### GET /visits
-
-Returns all parking visits.
-
----
-
-## 3. Get Visit By ID
-
-### GET /visits/:id
-
-Example:
-
-```text
-GET /visits/1
-```
-
----
-
-# Valet Workflow APIs
-
-## 4. Request Vehicle
-
-### POST /visits/:id/request-vehicle
-
-Updates visit status:
-
-```text
-CheckedIn → Requested
-```
-
----
-
-## 5. Acknowledge Request
-
-### POST /visits/:id/acknowledge
-
-Valet accepts the request.
-
-Updates status:
-
-```text
-Requested → InProgress
-```
-
----
-
-## 6. Vehicle Ready
-
-### POST /visits/:id/ready
-
-Vehicle ready for pickup.
-
-Updates status:
-
-```text
-InProgress → Ready
-```
-
----
-
-## 7. Check-Out Vehicle
-
-### POST /visits/:id/check-out
-
-Customer exits parking facility.
-
-Updates status:
-
-```text
-Ready → CheckedOut
-```
-
-Also updates:
-- exit time
-
----
-
-# Add-On Service API
-
-## 8. Add-On Service
-
-### POST /visits/:id/add-on
-
-### Request Body
-
-```json
-{
-  "service": "Car Wash"
-}
-```
-
----
-
-# Sample Curl Commands
-
-## Get All Visits
-
-```bash
-curl -i http://localhost:9000/visits
-```
-
----
-
-## Check-In Vehicle
-
-```bash
-curl -i \
--H "Content-Type: application/json" \
--d '{
-  "vehicleNumber":"KA01AB1234",
-  "customerName":"Alice",
-  "status":"CheckedIn"
-}' \
-http://localhost:9000/check-in
-```
-
----
-
-## Request Vehicle
-
-```bash
-curl -X POST \
-http://localhost:9000/visits/1/request-vehicle
-```
-
----
-
-## Acknowledge Request
-
-```bash
-curl -X POST \
-http://localhost:9000/visits/1/acknowledge
-```
-
----
-
-## Mark Vehicle Ready
-
-```bash
-curl -X POST \
-http://localhost:9000/visits/1/ready
-```
-
----
-
-## Add-On Service
-
-```bash
-curl -X POST \
--H "Content-Type: application/json" \
--d '{
-  "service":"Car Wash"
-}' \
-http://localhost:9000/visits/1/add-on
-```
-
----
-
-## Check-Out Vehicle
-
-```bash
-curl -X POST \
-http://localhost:9000/visits/1/check-out
-```
-
----
-
-# Local Development Setup
-
-## Prerequisites
-
-- Java 17
-- SBT
-- MySQL
-
----
-
-# Run Locally
-
+### 2. Start Play Backend API
 ```bash
 sbt run
 ```
+The backend API and server-rendered templates will start at **`http://localhost:9000`**. You can visit:
+* Service Advisor UI: `http://localhost:9000/user`
+* Valet Console UI: `http://localhost:9000/valet`
+* Admin Dashboard UI: `http://localhost:9000/admin`
 
-Application runs at:
+### 3. Start React Frontend Console
+Open a new terminal window to start the Vite development server:
+```bash
+# Install npm dependencies
+npm install
 
-```text
-http://localhost:9000
+# Start Vite dev server
+npm run dev
+```
+The React frontend console will start at **`http://localhost:3000`**. 
+
+Vite is configured to proxy all `/api` requests automatically to `http://localhost:9000`.
+
+---
+
+## API Documentation
+
+All API requests require role validation passed through the custom header `X-User-Role`. Allowed header values are:
+* `"Service Advisor"` or `"Admin"` (Access checking in, requesting, and checkout actions)
+* `"Valet"` or `"Admin"` (Access acknowledging, marking ready, starting/completing add-on tasks)
+
+### Endpoints Overview
+
+| HTTP Method | Path | Allowed Roles | Request Body / Action |
+|---|---|---|---|
+| `POST` | `/api/user/visits/check-in` | Service Advisor, Admin | Check-in new vehicle |
+| `GET` | `/api/admin/visits` | Admin | Get list of all visits |
+| `GET` | `/api/user/visits/:id` | Valet, Service Advisor, Admin | Get details of a single visit |
+| `POST` | `/api/user/visits/:id/request-vehicle` | Service Advisor, Admin | Request vehicle retrieval |
+| `POST` | `/api/valet/visits/:id/acknowledge` | Valet, Admin | Valet begins retrieval |
+| `POST` | `/api/valet/visits/:id/ready` | Valet, Admin | Mark vehicle ready for customer |
+| `POST` | `/api/user/visits/:id/add-ons` | Service Advisor, Admin | Request add-on service |
+| `GET` | `/api/valet/visits/:id/add-ons` | Valet, Service Advisor, Admin | Get add-on requests for visit |
+| `POST` | `/api/valet/visits/:id/add-ons/start` | Valet, Admin | Start add-on service |
+| `POST` | `/api/valet/visits/:id/add-ons/complete`| Valet, Admin | Complete add-on service |
+| `POST` | `/api/valet/visits/:id/check-out` | Valet, Admin | Check-out vehicle |
+
+### Curl Command Examples
+
+#### 1. Check-In a Vehicle (Service Advisor)
+```bash
+curl -i -X POST \
+  -H "X-User-Role: Service Advisor" \
+  -H "Content-Type: application/json" \
+  -d '{"vehicleNumber": "KA01AB1234", "customerName": "Alice", "status": "CheckedIn"}' \
+  http://localhost:9000/api/user/visits/check-in
 ```
 
----
-
-# Database Configuration
-
-Configured in:
-
-```text
-conf/application.conf
+#### 2. Request Vehicle Retrieval (Service Advisor)
+```bash
+curl -i -X POST \
+  -H "X-User-Role: Service Advisor" \
+  http://localhost:9000/api/user/visits/1/request-vehicle
 ```
 
-Database:
-- MySQL 8.0
-- Database Name: valet_db
-
----
-
-# Database Schema
-
-## parking_service
-
-| Column | Type |
-|---|---|
-| id | INT |
-| vehicle_number | VARCHAR |
-| customer_name | VARCHAR |
-| status | VARCHAR |
-| valet_name | VARCHAR |
-| add_on_service | VARCHAR |
-| entry_time | TIMESTAMP |
-| exit_time | TIMESTAMP |
-
----
-
+#### 3. Start Add-on Service (Valet)
+```bash
+curl -i -X POST \
+  -H "X-User-Role: Valet" \
+  -H "Content-Type: application/json" \
+  -d '{"service": "Car Wash"}' \
+  http://localhost:9000/api/valet/visits/1/add-ons/start
+```
