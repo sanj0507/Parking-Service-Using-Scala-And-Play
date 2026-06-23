@@ -45,9 +45,10 @@ class VisitController @Inject()(
         status = (json \ "status").as[String]
       )
 
-      visitService.checkIn(visit).map { _ =>
+      visitService.checkIn(visit).map { generatedId =>
         Created(Json.obj(
-          "message" -> "Check-in request created successfully"
+          "id" -> generatedId,
+          "message" -> s"Check-in request created successfully with ID $generatedId"
         ))
       }.recover {
         case ex: Exception =>
@@ -64,7 +65,7 @@ class VisitController @Inject()(
     } else if (!allowed(request.role, Set(Role.ServiceAdvisor, Role.Admin))) {
       forbidden
     } else {
-      visitService.getVisits().map { visits =>
+      visitService.getVisitsWithAddOns().map { visits =>
         Ok(Json.obj(
           "count" -> visits.size,
           "data" -> visits

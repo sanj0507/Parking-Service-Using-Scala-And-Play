@@ -9,7 +9,7 @@ import {
   RefreshCw, ShieldCheck, Timer, TrendingUp,
   UserRoundCheck, Wrench, Zap, ArrowRight
 } from "lucide-react";
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { parkingApi } from "./api/parkingApi.js";
 
 /* ─── Palette ────────────────────────────────────────────────── */
@@ -43,10 +43,12 @@ const STATUS = {
   RequestedCheckIn: { label: "Check-In Req",  color: C.teal,   soft: C.tealSoft   },
   CheckedIn:        { label: "Checked In",    color: C.blue,   soft: C.blueSoft   },
   Requested:        { label: "Requested",     color: C.blue,   soft: C.blueSoft   },
+  RequestedCheckout: { label: "Checkout Req", color: C.blue,   soft: C.blueSoft   },
   Acknowledged:     { label: "Acknowledged",  color: C.amber,  soft: C.amberSoft  },
   InProgress:       { label: "In Progress",   color: C.amber,  soft: C.amberSoft  },
   Ready:            { label: "Ready",         color: C.green,  soft: C.greenSoft  },
   AddOn:            { label: "Add-on",        color: C.indigo, soft: C.indigoSoft },
+  RequestedAddOn:   { label: "Add-on",        color: C.indigo, soft: C.indigoSoft },
   AddOnInProgress:  { label: "Add-On Active", color: C.indigo, soft: C.indigoSoft },
   AddOnCompleted:   { label: "Add-On Done",   color: C.green,  soft: C.greenSoft  },
   CheckedOut:       { label: "Checked Out",   color: C.gray,   soft: C.graySoft   },
@@ -59,7 +61,7 @@ const STEPS = [
   { key: "Acknowledged",     label: "Acknowledged", icon: BadgeCheck,   desc: "Valet confirmed" },
   { key: "InProgress",       label: "In Service",   icon: Wrench,       desc: "Service underway" },
   { key: "Ready",            label: "Ready",        icon: CheckCircle2, desc: "Awaiting pickup" },
-  { key: "Requested",        label: "Checkout Req", icon: BellRing,     desc: "Customer on way" },
+  { key: "RequestedCheckout", label: "Checkout Req", icon: BellRing,     desc: "Customer on way" },
   { key: "CheckedOut",       label: "Departed",     icon: LogOut,       desc: "Left lot" },
 ];
 
@@ -72,7 +74,7 @@ const ZONES = [
   { key: "A", label: "Entry Row",   range: [1,  10], statuses: ["RequestedCheckIn", "CheckedIn"],              color: C.blue   },
   { key: "B", label: "Service Bay", range: [11, 20], statuses: ["Acknowledged", "InProgress"],                color: C.amber  },
   { key: "C", label: "Wash Lane",   range: [21, 30], statuses: ["AddOn", "AddOnInProgress", "AddOnCompleted"], color: C.indigo },
-  { key: "D", label: "Ready Lane",  range: [31, 40], statuses: ["Ready", "Requested"],                        color: C.green  },
+  { key: "D", label: "Ready Lane",  range: [31, 40], statuses: ["Ready", "Requested", "RequestedCheckout"],    color: C.green  },
   { key: "E", label: "Exit Row",    range: [41, 50], statuses: ["CheckedOut"],                                 color: C.gray   },
 ];
 
@@ -87,8 +89,40 @@ const ACT = {
   ready:  "Vehicle Ready",        checkout:    "Checked Out",
   request:"Checkout Requested",   addon:       "Add-On Requested",
   loadAddOns:"Add-Ons Loaded",    startAddOn:  "Add-On Started",
-  completeAddOn:"Add-On Completed", load:      "Visits Loaded",
+  completeAddOn:"Add-On Finished", load:      "Visits Loaded",
 };
+
+function getVirtualStatus(v) {
+  if (v.status === "CheckedOut") return "CheckedOut";
+
+  // 1. In Progress Add-ons
+  const activeAddOn = v.addOns?.find(a => a.status === "AddOnInProgress");
+  if (activeAddOn) {
+    if (activeAddOn.serviceName === "Washing" || activeAddOn.serviceName === "Cleaning") {
+      return "AddOnInProgress"; // Wash Lane active
+    } else {
+      return "InProgress"; // Service Bay active
+    }
+  }
+
+  // 2. Pending Add-ons
+  const pendingAddOn = v.addOns?.find(a => a.status === "RequestedAddOn");
+  if (pendingAddOn) {
+    if (pendingAddOn.serviceName === "Washing" || pendingAddOn.serviceName === "Cleaning") {
+      return "AddOn"; // Wash Lane pending
+    } else {
+      return "Acknowledged"; // Service Bay pending
+    }
+  }
+
+  // 3. Completed Add-ons (and still CheckedIn)
+  const completedAddOn = v.addOns?.find(a => a.status === "AddOnCompleted");
+  if (completedAddOn && v.status === "CheckedIn") {
+    return "AddOnCompleted";
+  }
+
+  return v.status;
+}
 
 function buildSlots(allVisits) {
   // Bucket vehicles into zones by their status
@@ -96,10 +130,12 @@ function buildSlots(allVisits) {
   ZONES.forEach(z => { buckets[z.key] = []; });
 
   allVisits.forEach(v => {
-    const zone = ZONES.find(z => z.statuses.includes(v.status));
-    if (zone) buckets[zone.key].push(v);
+    const virtualStatus = getVirtualStatus(v);
+    const zone = ZONES.find(z => z.statuses.includes(virtualStatus));
+    const updatedVehicle = { ...v, status: virtualStatus };
+    if (zone) buckets[zone.key].push(updatedVehicle);
     // Unrecognised statuses go to A as fallback
-    else buckets["A"].push(v);
+    else buckets["A"].push(updatedVehicle);
   });
 
   // Build all 50 slot objects
@@ -133,7 +169,13 @@ export default function App() {
   const [visits, setVisits]   = useState([]);
   const [addOns, setAddOns]   = useState([]);
   const [busy, setBusy]       = useState("");
+  const [lastCheckedInVisit, setLastCheckedInVisit] = useState(null);
   const toast = useToast();
+
+  // Load visits automatically on mount
+  useEffect(() => {
+    go("load", "admin").catch(err => console.error("Error loading initial visits:", err));
+  }, []);
 
   const nav    = NAV.find(n => n.key === tab) ?? NAV[0];
   const role   = tab === "timeline" ? "admin" : tab;
@@ -147,12 +189,62 @@ export default function App() {
     free:    Math.max(0, TOTAL - visits.filter(v => v.status !== "CheckedOut").length),
   }), [visits]);
 
+  // Load add-ons automatically when visitId or tab changes
+  useEffect(() => {
+    if (visitId && (tab === "valet" || tab === "user")) {
+      parkingApi.getAddOns(role, visitId)
+        .then(res => setAddOns(res.body?.data ?? []))
+        .catch(() => setAddOns([]));
+    } else {
+      setAddOns([]);
+    }
+  }, [visitId, tab, role]);
+
   async function run(action, r = role) {
     setBusy(`${r}:${action}`);
     try {
       const res = await go(action, r);
       setApiResp({ ok: true, label: ACT[action], body: res });
-      toast({ title: ACT[action], status: "success", duration: 2000, isClosable: true, position: "bottom-right" });
+
+      let title = ACT[action];
+      let desc = undefined;
+
+      if (action === "create") {
+        const generatedId = res.body?.id;
+        if (generatedId) {
+          setLastCheckedInVisit({
+            id: generatedId,
+            vehicleNumber: form.vehicleNumber,
+            customerName: form.customerName
+          });
+          title = "Check-In Created";
+          desc = `Assigned Visit ID: ${generatedId}`;
+          // Clear the form
+          setForm({ vehicleNumber: "", customerName: "", mobileNumber: "" });
+        }
+      }
+
+      toast({
+        title,
+        description: desc,
+        status: "success",
+        duration: action === "create" ? 6000 : 2000,
+        isClosable: true,
+        position: "bottom-right"
+      });
+
+      // Auto reload lot map after each change (except loading actions)
+      if (action !== "load" && action !== "loadAddOns") {
+        await go("load", "admin");
+        if (visitId && (tab === "valet" || tab === "user")) {
+          try {
+            const res = await parkingApi.getAddOns(role, visitId);
+            setAddOns(res.body?.data ?? []);
+          } catch (e) {
+            // ignore
+          }
+        }
+      }
     } catch (e) {
       setApiResp({ ok: false, label: "Failed", body: { error: e.message } });
       toast({ title: "Failed", description: e.message, status: "error", duration: 3000, isClosable: true, position: "bottom-right" });
@@ -307,51 +399,10 @@ export default function App() {
           </HStack>
         </Flex>
 
-        <Box px={{ base: 5, md: 8 }} py={6}>
-          <Stack spacing={5}>
-
-            {/* ── Hero banner ── */}
-            <Box bg={C.sidebar} borderRadius="14px" overflow="hidden" position="relative"
-              boxShadow="0 4px 24px rgba(15,22,35,0.14)">
-              {/* Grid texture */}
-              <Box position="absolute" inset={0} opacity={0.05}
-                bgImage="linear-gradient(#fff 1px,transparent 1px),linear-gradient(90deg,#fff 1px,transparent 1px)"
-                bgSize="32px 32px" pointerEvents="none" />
-              <Flex position="relative" px={{ base: 5, md: 7 }} py={{ base: 5, md: 6 }}
-                justify="space-between" align="center"
-                direction={{ base: "column", md: "row" }} gap={5}>
-                <Box>
-                  <HStack spacing={2} mb={2}>
-                    <Icon as={ParkingCircle} boxSize={3.5} color={C.teal} />
-                    <Text fontSize="10px" fontWeight="700" color="#7b9ab8" letterSpacing="0.14em">
-                      PARKING LOT DASHBOARD
-                    </Text>
-                  </HStack>
-                  <Text fontSize={{ base: "20px", md: "26px" }} fontWeight="800"
-                    color="white" lineHeight={1.2}>
-                    Live lot map, valet flow<br />and vehicle requests.
-                  </Text>
-                  <Text fontSize="13px" color="#8fadc6" mt={2} lineHeight={1.65} maxW="420px">
-                    Track slots, pending arrivals, ready vehicles, and service add-ons — all in one console.
-                  </Text>
-                </Box>
-                {/* Occupancy pill */}
-                <Box bg="#ffffff0c" border="1px solid #ffffff18" borderRadius="12px"
-                  px={5} py={4} textAlign="center" minW="160px" flexShrink={0}>
-                  <Text fontSize="9px" fontWeight="700" color="#7b9ab8" letterSpacing="0.14em">OCCUPANCY</Text>
-                  <Text fontSize="36px" fontWeight="900" color="white" lineHeight={1} mt={1.5}>
-                    {occupancy}%
-                  </Text>
-                  <Text fontSize="11px" color="#8fadc6" mt={0.5}>{m.active} active · {m.free} free</Text>
-                  <Box h="5px" bg="#ffffff14" borderRadius="999px" overflow="hidden" mt={3}>
-                    <Box h="full" w={`${occupancy}%`}
-                      bg="linear-gradient(90deg,#0d9488,#16a34a)" transition="width 0.4s" borderRadius="999px" />
-                  </Box>
-                </Box>
-              </Flex>
-            </Box>
-
-            {/* ── Metric cards ── */}
+        <Box px={{ base: 5, md: 8 }} py={5}>
+          <Stack spacing={4}>
+ 
+            {/* ── Metric cards (moved to top for compactness) ── */}
             <SimpleGrid columns={{ base: 2, sm: 3, md: 5 }} spacing={3}>
               {[
                 { icon: Car,           label: "Active",     value: m.active,  color: C.blue,   soft: C.blueSoft   },
@@ -361,83 +412,399 @@ export default function App() {
                 { icon: ParkingCircle, label: "Free Slots", value: m.free,    color: C.teal,   soft: C.tealSoft, suffix: `/${TOTAL}` },
               ].map(c => (
                 <Box key={c.label} bg={C.surface} border={`1px solid ${C.border}`}
-                  borderTop={`3px solid ${c.color}`} borderRadius="12px" p={4}
-                  _hover={{ boxShadow: "0 4px 16px rgba(0,0,0,0.07)", transform: "translateY(-1px)" }}
-                  transition="all 0.18s">
-                  <Flex w="30px" h="30px" borderRadius="8px" bg={c.soft}
-                    align="center" justify="center" mb={3}>
-                    <Icon as={c.icon} boxSize={3.5} color={c.color} />
+                  borderTop={`3px solid ${c.color}`} borderRadius="12px" p={3}
+                  _hover={{ boxShadow: "0 4px 12px rgba(0,0,0,0.05)", transform: "translateY(-1px)" }}
+                  transition="all 0.15s">
+                  <Flex align="center" gap={2}>
+                    <Flex w="24px" h="24px" borderRadius="6px" bg={c.soft}
+                      align="center" justify="center" flexShrink={0}>
+                      <Icon as={c.icon} boxSize={3} color={c.color} />
+                    </Flex>
+                    <Text fontSize="10px" fontWeight="600" color={C.muted}>{c.label}</Text>
                   </Flex>
-                  <Text fontSize="24px" fontWeight="800" color={C.text} lineHeight={1}>
+                  <Text fontSize="20px" fontWeight="800" color={C.text} lineHeight={1} mt={2}>
                     {c.value}
-                    {c.suffix && <Text as="span" fontSize="12px" color={C.muted} fontWeight="500" ml={0.5}>{c.suffix}</Text>}
+                    {c.suffix && <Text as="span" fontSize="10px" color={C.muted} fontWeight="500" ml={0.5}>{c.suffix}</Text>}
                   </Text>
-                  <Text fontSize="11px" color={C.muted} mt={1}>{c.label}</Text>
                 </Box>
               ))}
             </SimpleGrid>
-
-            {/* ── Lot map ── */}
-            <Grid templateColumns={{ base: "1fr", xl: "1.35fr 0.65fr" }} gap={5}>
+ 
+            {/* ── Unified Split Dashboard Layout ── */}
+            <Grid templateColumns={{ base: "1fr", xl: "1.15fr 0.85fr" }} gap={5} alignItems="start">
+              
+              {/* Left Pane: Controls, Active Lot & API Logs */}
               <GridItem>
+                <Stack spacing={4}>
+                  
+                  {/* Tabbed Action Panels */}
+                  <Card>
+                    {/* Tab header */}
+                    <Flex align="center" gap={3} pb={4} mb={4} borderBottom={`1px solid ${C.border}`}>
+                      <Flex w="36px" h="36px" borderRadius="9px"
+                        bg={tab==="user"?C.blueSoft:tab==="valet"?C.tealSoft:tab==="admin"?C.amberSoft:C.indigoSoft}
+                        align="center" justify="center" flexShrink={0}>
+                        <Icon as={nav.icon} boxSize={4} color={nav.color} />
+                      </Flex>
+                      <Box>
+                        <Text fontSize="14px" fontWeight="700" color={C.text}>{nav.label}</Text>
+                        <Text fontSize="11px" color={C.muted}>
+                          {tab==="user"?"Check vehicles in and out"
+                           :tab==="valet"?"Manage vehicle handoffs"
+                           :tab==="admin"?"Monitor all lot activity"
+                           :"Track any vehicle's journey"}
+                        </Text>
+                      </Box>
+                    </Flex>
+ 
+                    {/* USER */}
+                    {tab === "user" && (
+                      <Stack spacing={5} divider={<Divider borderColor={C.border} />}>
+                        <Section label="Request Check-In">
+                          <SimpleGrid columns={{ base: 1, md: 3 }} spacing={3} mt={2}>
+                            <Field label="Vehicle No." value={form.vehicleNumber} onChange={e=>setForm({...form,vehicleNumber:e.target.value})} placeholder="TN01AB1234" required />
+                            <Field label="Customer Name" value={form.customerName} onChange={e=>setForm({...form,customerName:e.target.value})} placeholder="John Doe" required />
+                            <Field label="Mobile" value={form.mobileNumber} onChange={e=>setForm({...form,mobileNumber:e.target.value})} placeholder="9876543210" />
+                          </SimpleGrid>
+                          <AppBtn mt={3} color={C.blue} soft={C.blueSoft} icon={CarFront} loading={busy==="user:create"} onClick={()=>run("create","user")}>
+                            Request Check-In
+                          </AppBtn>
+
+                          {lastCheckedInVisit && (
+                            <Box bg={C.greenSoft} border={`1px solid ${C.green}30`} borderRadius="10px" p={3.5} mt={4.5}>
+                              <Flex align="center" gap={3}>
+                                <Icon as={CheckCircle2} boxSize={5} color={C.green} />
+                                <Box>
+                                  <Text fontSize="13px" fontWeight="700" color={C.text}>
+                                    Vehicle Registered Successfully
+                                  </Text>
+                                  <Text fontSize="12px" color={C.sub} mt={0.5}>
+                                    Vehicle <strong>{lastCheckedInVisit.vehicleNumber}</strong> has been assigned Visit ID: <strong style={{ color: C.green }}>{lastCheckedInVisit.id}</strong>.
+                                  </Text>
+                                </Box>
+                                <Button size="xs" ml="auto" colorScheme="green" variant="ghost" onClick={() => setLastCheckedInVisit(null)}>
+                                  Dismiss
+                                </Button>
+                              </Flex>
+                            </Box>
+                          )}
+                        </Section>
+ 
+                        <Section label="Request Check-Out">
+                          <Box maxW="200px" mt={2}>
+                            <Field label="Visit ID" value={visitId} onChange={e=>setVisitId(e.target.value)} placeholder="101" type="number" />
+                          </Box>
+                          <AppBtn mt={3} color={C.blue} soft={C.blueSoft} icon={BellRing} outline loading={busy==="user:request"} onClick={()=>run("request","user")}>
+                            Request Check-Out
+                          </AppBtn>
+                        </Section>
+ 
+                        <Section label="Add-On Services">
+                          <SimpleGrid columns={{ base: 1, md: 2 }} spacing={3} mt={2} maxW="440px">
+                            <Field label="Visit ID" value={visitId} onChange={e=>setVisitId(e.target.value)} placeholder="101" type="number" />
+                            <FormControl>
+                              <FormLabel fontSize="11px" fontWeight="600" color={C.muted} letterSpacing="0.06em" mb={1.5}>Service</FormLabel>
+                              <Input list="uo" value={addon} onChange={e=>setAddon(e.target.value)}
+                                bg={C.surface} border={`1px solid ${C.border}`} borderRadius="9px"
+                                color={C.text} fontSize="13px"
+                                _focus={{ borderColor: C.borderFocus, boxShadow: "none" }} />
+                              <datalist id="uo">{ADD_ONS.map(o=><option key={o} value={o}/>)}</datalist>
+                            </FormControl>
+                          </SimpleGrid>
+                          <AppBtn mt={3} color={C.indigo} soft={C.indigoSoft} icon={Wrench} outline loading={busy==="user:addon"} onClick={()=>run("addon","user")}>
+                            Request Add-On
+                          </AppBtn>
+                        </Section>
+                      </Stack>
+                    )}
+ 
+                    {/* VALET */}
+                    {tab === "valet" && (
+                      <Stack spacing={5} divider={<Divider borderColor={C.border} />}>
+                        <Section label="Visit Actions">
+                          <Box maxW="200px" mt={2} mb={3}>
+                            <Field label="Visit ID" value={visitId} onChange={e=>setVisitId(e.target.value)} placeholder="101" type="number" />
+                          </Box>
+                          <Stack spacing={2}>
+                            <ActionRow color={C.teal}   soft={C.tealSoft}   icon={BadgeCheck}   title="Approve Request"  sub="Approve check-in and update status"   loading={busy==="valet:acknowledge"} onClick={()=>run("acknowledge","valet")} />
+                            <ActionRow color={C.green}  soft={C.greenSoft}  icon={CheckCircle2} title="Mark Ready"       sub="Vehicle serviced, awaiting pickup"     loading={busy==="valet:ready"}       onClick={()=>run("ready","valet")} />
+                            <ActionRow color={C.indigo} soft={C.indigoSoft} icon={CarFront}     title="Accept Checkout"  sub="Confirm handoff to customer"           loading={busy==="valet:checkout"}    onClick={()=>run("checkout","valet")} />
+                          </Stack>
+                        </Section>
+ 
+                        <Section label="Add-On Work">
+                          <SimpleGrid columns={{ base: 1, md: 2 }} spacing={3} mt={2} mb={3} maxW="440px">
+                            <Field label="Visit ID" value={visitId} onChange={e=>setVisitId(e.target.value)} placeholder="101" type="number" />
+                            <FormControl>
+                              <FormLabel fontSize="11px" fontWeight="600" color={C.muted} letterSpacing="0.06em" mb={1.5}>Service</FormLabel>
+                              <Input list="vo" value={addon} onChange={e=>setAddon(e.target.value)}
+                                bg={C.surface} border={`1px solid ${C.border}`} borderRadius="9px"
+                                color={C.text} fontSize="13px"
+                                _focus={{ borderColor: C.borderFocus, boxShadow: "none" }} />
+                              <datalist id="vo">{ADD_ONS.map(o=><option key={o} value={o}/>)}</datalist>
+                            </FormControl>
+                          </SimpleGrid>
+                          <Stack spacing={2}>
+                            <ActionRow color={C.amber} soft={C.amberSoft} icon={Wrench}       title="Start Add-On"   sub="Begin the selected extra service"         loading={busy==="valet:startAddOn"}    onClick={()=>run("startAddOn","valet")} />
+                            <ActionRow color={C.green} soft={C.greenSoft} icon={CheckCircle2} title="Stop Add-On"    sub="Finish and complete the extra service"   loading={busy==="valet:completeAddOn"} onClick={()=>run("completeAddOn","valet")} />
+                          </Stack>
+                          {addOns.length > 0 && (
+                            <Stack spacing={2} mt={3}>
+                              {addOns.map(a => (
+                                <Flex key={a.id} align="center" justify="space-between" gap={3}
+                                  px={3} py={2} border={`1px solid ${C.border}`} borderRadius="9px" bg={C.faint}>
+                                  <Box>
+                                    <Text fontSize="12px" fontWeight="600" color={C.text}>{a.serviceName}</Text>
+                                    <Text fontSize="10px" color={C.muted}>Visit #{a.visitId} · {a.createdAt ?? "n/a"}</Text>
+                                  </Box>
+                                  <StatusPill status={a.status} />
+                                </Flex>
+                              ))}
+                            </Stack>
+                          )}
+                        </Section>
+                      </Stack>
+                    )}
+ 
+                    {/* ADMIN */}
+                    {tab === "admin" && (
+                      <Stack spacing={4}>
+                        <Flex justify="space-between" align="center">
+                          <SLabel>Live Vehicle Data</SLabel>
+                          <AppBtn color={C.amber} soft={C.amberSoft} icon={RefreshCw} size="sm"
+                            loading={busy==="admin:load"} onClick={()=>run("load","admin")}>
+                            Refresh
+                          </AppBtn>
+                        </Flex>
+                        <SimpleGrid columns={{ base: 1, md: 2 }} spacing={4}>
+                          <VehicleTable title="In Lot"      icon={Car}        iconColor={C.blue}   visits={active} />
+                          <VehicleTable title="All History" icon={TrendingUp} iconColor={C.indigo} visits={visits} />
+                        </SimpleGrid>
+                      </Stack>
+                    )}
+ 
+                    {/* TIMELINE */}
+                    {tab === "timeline" && (
+                      <Stack spacing={4}>
+                        <Section label="Look Up Visit">
+                          <HStack mt={2} spacing={3} align="flex-end" maxW="340px">
+                            <Box flex={1}>
+                              <Field label="Visit ID" value={tlId} onChange={e=>setTlId(e.target.value)} placeholder="101" type="number" />
+                            </Box>
+                            <AppBtn color={C.indigo} soft={C.indigoSoft} icon={CircleDot} loading={tlLoading} onClick={trackTimeline}>
+                              Track
+                            </AppBtn>
+                          </HStack>
+                        </Section>
+ 
+                        {!tlVisit && !tlLoading && (
+                          <Flex direction="column" align="center" gap={2} py={8}
+                            borderRadius="10px" bg={C.faint} border={`1.5px dashed ${C.border}`}>
+                            <Icon as={Clock} boxSize={6} color={C.muted} />
+                            <Text fontSize="12px" color={C.muted}>Enter a Visit ID to see its journey</Text>
+                          </Flex>
+                        )}
+ 
+                        {tlVisit && (
+                          <Stack spacing={4}>
+                            {/* Vehicle header */}
+                            <Flex align="center" gap={3} px={4} py={3}
+                              bg={C.faint} borderRadius="10px" border={`1px solid ${C.border}`}>
+                              <Flex w="42px" h="42px" borderRadius="10px" bg={C.blueSoft}
+                                align="center" justify="center" flexShrink={0}>
+                                <Icon as={CarFront} boxSize={5} color={C.blue} />
+                              </Flex>
+                              <Box flex={1} minW={0}>
+                                <Text fontWeight="800" fontSize="15px" color={C.text}>{tlVisit.vehicleNumber ?? "—"}</Text>
+                                <Text fontSize="12px" color={C.muted}>{tlVisit.customerName} · Visit #{tlVisit.id}</Text>
+                              </Box>
+                              <StatusPill status={tlVisit.status} />
+                            </Flex>
+ 
+                            {/* Step flow */}
+                            <Box overflowX="auto" py={1}>
+                              <HStack spacing={0} minW="540px">
+                                {STEPS.map((step, i) => {
+                                  const order = STEPS.map(s => s.key);
+                                  const cur   = order.indexOf(tlVisit.status);
+                                  const done  = i <= cur;
+                                  const now   = step.key === tlVisit.status;
+                                  const cfg   = STATUS[step.key] ?? STATUS["CheckedOut"];
+                                  return (
+                                    <Box key={step.key} flex={1} display="flex" flexDirection="column"
+                                      alignItems="center" position="relative">
+                                      {i < STEPS.length - 1 && (
+                                        <Box position="absolute" left="50%" top="18px" w="100%" h="2px"
+                                          bg={done && i < cur ? cfg.color : C.border} zIndex={0} />
+                                      )}
+                                      <Flex w="36px" h="36px" borderRadius="full"
+                                        bg={done ? cfg.soft : C.faint}
+                                        border={`2px solid ${done ? cfg.color : C.border}`}
+                                        align="center" justify="center"
+                                        position="relative" zIndex={1}
+                                        boxShadow={now ? `0 0 0 4px ${cfg.color}22` : "none"}
+                                        transition="all 0.2s">
+                                        <Icon as={step.icon} boxSize={3.5} color={done ? cfg.color : C.muted} />
+                                      </Flex>
+                                      <Text fontSize="10px" fontWeight={now ? "700" : "500"}
+                                        color={done ? C.text : C.muted} mt={1.5} textAlign="center" px={0.5}>
+                                        {step.label}
+                                      </Text>
+                                      {now && (
+                                        <Box mt={1} px={1.5} py={0.5} borderRadius="4px"
+                                          bg={cfg.color} fontSize="8px" fontWeight="700"
+                                          color="white" letterSpacing="0.06em">NOW</Box>
+                                      )}
+                                    </Box>
+                                  );
+                                })}
+                              </HStack>
+                            </Box>
+ 
+                            {/* Detail chips */}
+                            <SimpleGrid columns={3} spacing={3}>
+                              {[
+                                { k: "Customer",   v: tlVisit.customerName ?? "—" },
+                                { k: "Mobile",     v: tlVisit.mobileNumber  ?? "—" },
+                                { k: "Checked In", v: tlVisit.createdAt     ?? "—" },
+                              ].map(d => (
+                                <Box key={d.k} bg={C.faint} border={`1px solid ${C.border}`}
+                                  borderRadius="9px" p={3}>
+                                  <Text fontSize="9px" fontWeight="700" color={C.muted}
+                                    letterSpacing="0.1em">{d.k.toUpperCase()}</Text>
+                                  <Text fontSize="13px" fontWeight="600" mt={1} color={C.text}>{d.v}</Text>
+                                </Box>
+                              ))}
+                            </SimpleGrid>
+                          </Stack>
+                        )}
+                      </Stack>
+                    )}
+                  </Card>
+ 
+                  {/* Active Lot (Show here when not on admin tab) */}
+                  {tab !== "admin" && (
+                    <Card>
+                      <Flex justify="space-between" align="center" mb={4}>
+                        <Box>
+                          <SLabel>Active Lot</SLabel>
+                          <Text fontSize="12px" color={C.muted} mt={0.5}>Vehicles currently inside</Text>
+                        </Box>
+                        <Box px={2.5} py={0.5} borderRadius="999px"
+                          bg={C.blueSoft} color={C.blue} fontSize="11px" fontWeight="700"
+                          border={`1px solid ${C.blue}28`}>
+                          {active.length}
+                        </Box>
+                      </Flex>
+                      <Box maxH="280px" overflowY="auto" pr={1}
+                        sx={{
+                          "&::-webkit-scrollbar": { width: "4px" },
+                          "&::-webkit-scrollbar-track": { background: "transparent" },
+                          "&::-webkit-scrollbar-thumb": { background: C.border, borderRadius: "4px" }
+                        }}>
+                        <VStack spacing={2} align="stretch">
+                          {active.length === 0 ? (
+                            <Flex direction="column" align="center" gap={2} py={8}
+                              borderRadius="10px" bg={C.faint} border={`1.5px dashed ${C.border}`}>
+                              <Icon as={ParkingCircle} boxSize={6} color={C.muted} />
+                              <Text fontSize="12px" color={C.muted}>No active vehicles in lot</Text>
+                            </Flex>
+                          ) : active.map(v => {
+                              const vZone = ZONES.find(z => z.statuses.includes(v.status)) ?? ZONES[0];
+                              return (
+                                <Flex key={v.id} align="center" gap={3} px={3} py={2}
+                                  border={`1px solid ${C.border}`} borderRadius="10px"
+                                  _hover={{ bg: C.faint, transform: "translateX(2px)" }}
+                                  transition="all 0.15s">
+                                  <Flex w="30px" h="30px" borderRadius="7px"
+                                    bg={vZone.color + "18"}
+                                    align="center" justify="center" flexShrink={0}>
+                                    <Icon as={CarFront} boxSize={3.5} color={vZone.color} />
+                                  </Flex>
+                                  <Box flex={1} minW={0}>
+                                    <Text fontSize="13px" fontWeight="700" color={C.text}>{v.vehicleNumber}</Text>
+                                    <Text fontSize="11px" color={C.muted} isTruncated>
+                                      {v.customerName} · <Text as="span" color={vZone.color} fontWeight="600">{vZone.key}</Text>
+                                    </Text>
+                                  </Box>
+                                  <StatusPill status={v.status} />
+                                </Flex>
+                              );
+                            })}
+                        </VStack>
+                      </Box>
+                    </Card>
+                  )}
+ 
+                  {/* API response logs removed for a cleaner, user-focused UI */}
+                </Stack>
+              </GridItem>
+ 
+              {/* Right Pane: Live Lot Map & Status Legend (Always Visible) */}
+              <GridItem position={{ xl: "sticky" }} top="76px">
                 <Card>
-                  <Flex justify="space-between" align="center" mb={5}>
+                  <Flex justify="space-between" align="center" mb={4} direction={{ base: "column", sm: "row" }} gap={3}>
                     <Box>
-                      <SLabel>Parking Slot Map</SLabel>
-                      <Text fontSize="12px" color={C.muted} mt={0.5}>
-                        Vehicles move into their zone based on current status
+                      <SLabel>Live Lot Map</SLabel>
+                      <Text fontSize="11px" color={C.muted} mt={0.5}>
+                        Slots update instantly on workspace actions
                       </Text>
                     </Box>
-                    <HStack spacing={3} flexWrap="wrap" justify="flex-end">
+                    <HStack spacing={2.5} flexWrap="wrap" justify="flex-end">
                       {ZONES.map(z => (
-                        <HStack key={z.key} spacing={1.5}>
-                          <Box w="7px" h="7px" borderRadius="full" bg={z.color} />
-                          <Text fontSize="10px" color={C.muted}>{z.key} · {z.label}</Text>
+                        <HStack key={z.key} spacing={1}>
+                          <Box w="6.5px" h="6.5px" borderRadius="full" bg={z.color} />
+                          <Text fontSize="9.5px" fontWeight="600" color={C.muted}>{z.key}</Text>
                         </HStack>
                       ))}
                     </HStack>
                   </Flex>
-                  <Stack spacing={5}>
+ 
+                  <Stack spacing={4}>
                     {ZONES.map(zone => {
                       const zs = slots.filter(s => s.zone === zone.key);
                       const occupiedCount = zs.filter(s => s.occupied).length;
                       return (
                         <Box key={zone.key}>
-                          <Flex justify="space-between" align="center" mb={2}>
+                          <Flex justify="space-between" align="center" mb={1.5}>
                             <HStack spacing={2}>
-                              <Box w="8px" h="8px" borderRadius="full" bg={zone.color} />
-                              <Text fontSize="12px" color={C.sub}>
-                                <Text as="span" fontWeight="700" color={C.text} mr={1}>{zone.key}</Text>
-                                {zone.label}
+                              <Box w="6px" h="6px" borderRadius="full" bg={zone.color} />
+                              <Text fontSize="11px" fontWeight="600" color={C.sub}>
+                                Zone {zone.key} · <Text as="span" fontSize="10px" fontWeight="500" color={C.muted}>{zone.label}</Text>
                               </Text>
-                              {/* Status tags for zone */}
-                              <HStack spacing={1} display={{ base: "none", md: "flex" }}>
-                                {zone.statuses.map(s => (
-                                  <Box key={s} px={1.5} py={0.5} borderRadius="4px"
-                                    bg={zone.color + "14"} border={`1px solid ${zone.color}28`}
-                                    fontSize="9px" fontWeight="700" color={zone.color} letterSpacing="0.04em">
-                                    {STATUS[s]?.label ?? s}
-                                  </Box>
-                                ))}
-                              </HStack>
                             </HStack>
-                            <Text fontSize="11px" color={occupiedCount > 0 ? zone.color : C.muted} fontWeight={occupiedCount > 0 ? "700" : "400"}>
+                            <Text fontSize="10.5px" color={occupiedCount > 0 ? zone.color : C.muted} fontWeight={occupiedCount > 0 ? "700" : "500"}>
                               {occupiedCount}/{zs.length}
                             </Text>
                           </Flex>
-                          <SimpleGrid columns={{ base: 5, sm: 10 }} spacing={1.5}>
+                          
+                          {/* 5 columns is optimal for standard sidebar width */}
+                          <SimpleGrid columns={{ base: 5, sm: 5, md: 10, xl: 5, "2xl": 10 }} spacing={1.5}>
                             {zs.map(slot => {
                               const occupied = slot.occupied;
                               return (
-                                <Box key={slot.code} h="46px" borderRadius="7px"
-                                  bg={occupied ? zone.color + "14" : "#f7f8fb"}
-                                  border={`1px solid ${occupied ? zone.color + "55" : C.border}`}
+                                <Box key={slot.code} h="44px" position="relative"
+                                  bg={occupied ? zone.color + "0a" : "transparent"}
+                                  borderLeft={`2px solid ${occupied ? zone.color : C.border}`}
+                                  borderRight={`2px solid ${occupied ? zone.color : C.border}`}
+                                  borderTop="1px dashed transparent"
+                                  borderBottom="1px dashed transparent"
                                   p={1.5} display="flex" flexDirection="column" justifyContent="space-between"
-                                  transition="all 0.2s"
+                                  transition="all 0.18s"
+                                  _hover={{ bg: occupied ? zone.color + "14" : "#f1f3f7", transform: "translateY(-1px)", boxShadow: "0 2px 5px rgba(0,0,0,0.05)" }}
+                                  cursor="pointer"
                                   title={slot.vehicle ? `${slot.code}: ${slot.vehicle.vehicleNumber} (${slot.vehicle.status})` : `${slot.code}: free`}>
-                                  <Text fontSize="9px" fontWeight="800" color={occupied ? zone.color : C.muted} lineHeight={1}>{slot.code}</Text>
-                                  <Text fontSize="8px" fontWeight="600" color={occupied ? C.text : C.muted} isTruncated>
-                                    {slot.vehicle?.vehicleNumber ?? "Free"}
+                                  
+                                  {/* Smart LED status light */}
+                                  <Box position="absolute" top="5px" right="5px" w="4.5px" h="4.5px" borderRadius="full"
+                                    bg={occupied ? zone.color : "#cbd5e1"}
+                                    boxShadow={occupied ? `0 0 5px ${zone.color}` : "none"} />
+ 
+                                  <Text fontSize="8px" fontWeight="800" fontFamily="mono" color={occupied ? zone.color : C.muted} lineHeight={1}>
+                                    {slot.code}
+                                  </Text>
+                                  <Text fontSize="9px" fontWeight="700" fontFamily="mono" color={occupied ? C.text : C.muted} isTruncated>
+                                    {slot.vehicle?.vehicleNumber ?? "—"}
                                   </Text>
                                 </Box>
                               );
@@ -447,350 +814,24 @@ export default function App() {
                       );
                     })}
                   </Stack>
-                </Card>
-              </GridItem>
-
-              <GridItem>
-                <Card>
-                  <Flex justify="space-between" align="center" mb={4}>
-                    <Box>
-                      <SLabel>Active Lot</SLabel>
-                      <Text fontSize="12px" color={C.muted} mt={0.5}>Vehicles currently inside</Text>
-                    </Box>
-                    <Box px={2.5} py={0.5} borderRadius="999px"
-                      bg={C.blueSoft} color={C.blue} fontSize="11px" fontWeight="700"
-                      border={`1px solid ${C.blue}28`}>
-                      {active.length}
-                    </Box>
-                  </Flex>
-                  <VStack spacing={2} align="stretch">
-                    {active.length === 0 ? (
-                      <Flex direction="column" align="center" gap={2} py={8}
-                        borderRadius="10px" bg={C.faint} border={`1.5px dashed ${C.border}`}>
-                        <Icon as={ParkingCircle} boxSize={6} color={C.muted} />
-                        <Text fontSize="12px" color={C.muted}>Refresh admin data to populate</Text>
-                      </Flex>
-                    ) : active.slice(0, 6).map(v => {
-                        const vZone = ZONES.find(z => z.statuses.includes(v.status)) ?? ZONES[0];
-                        return (
-                        <Flex key={v.id} align="center" gap={3} px={3} py={2.5}
-                          border={`1px solid ${C.border}`} borderRadius="10px"
-                          _hover={{ bg: C.faint }} transition="background 0.1s">
-                          <Flex w="34px" h="34px" borderRadius="8px"
-                            bg={vZone.color + "18"}
-                            align="center" justify="center" flexShrink={0}>
-                            <Icon as={CarFront} boxSize={4} color={vZone.color} />
-                          </Flex>
-                          <Box flex={1} minW={0}>
-                            <Text fontSize="13px" fontWeight="700" color={C.text}>{v.vehicleNumber}</Text>
-                            <Text fontSize="11px" color={C.muted} isTruncated>
-                              {v.customerName} · <Text as="span" color={vZone.color} fontWeight="600">{vZone.key} – {vZone.label}</Text>
-                            </Text>
-                          </Box>
-                          <StatusPill status={v.status} />
-                        </Flex>
-                        );
-                      })}
-                  </VStack>
-                </Card>
-              </GridItem>
-            </Grid>
-
-            {/* ── Work panel + API response ── */}
-            <Grid templateColumns={{ base: "1fr", xl: "1fr 340px" }} gap={5} alignItems="start">
-              <GridItem>
-                <Card>
-                  {/* Tab header */}
-                  <Flex align="center" gap={3} pb={5} mb={5} borderBottom={`1px solid ${C.border}`}>
-                    <Flex w="36px" h="36px" borderRadius="9px"
-                      bg={tab==="user"?C.blueSoft:tab==="valet"?C.tealSoft:tab==="admin"?C.amberSoft:C.indigoSoft}
-                      align="center" justify="center" flexShrink={0}>
-                      <Icon as={nav.icon} boxSize={4} color={nav.color} />
-                    </Flex>
-                    <Box>
-                      <Text fontSize="14px" fontWeight="700" color={C.text}>{nav.label}</Text>
-                      <Text fontSize="11px" color={C.muted}>
-                        {tab==="user"?"Check vehicles in and out"
-                         :tab==="valet"?"Manage vehicle handoffs"
-                         :tab==="admin"?"Monitor all lot activity"
-                         :"Track any vehicle's journey"}
-                      </Text>
-                    </Box>
-                  </Flex>
-
-                  {/* USER */}
-                  {tab === "user" && (
-                    <Stack spacing={6} divider={<Divider borderColor={C.border} />}>
-                      <Section label="Request Check-In">
-                        <SimpleGrid columns={{ base: 1, md: 3 }} spacing={3} mt={3}>
-                          <Field label="Vehicle No." value={form.vehicleNumber} onChange={e=>setForm({...form,vehicleNumber:e.target.value})} placeholder="TN01AB1234" required />
-                          <Field label="Customer Name" value={form.customerName} onChange={e=>setForm({...form,customerName:e.target.value})} placeholder="John Doe" required />
-                          <Field label="Mobile" value={form.mobileNumber} onChange={e=>setForm({...form,mobileNumber:e.target.value})} placeholder="9876543210" />
-                        </SimpleGrid>
-                        <AppBtn mt={4} color={C.blue} soft={C.blueSoft} icon={CarFront} loading={busy==="user:create"} onClick={()=>run("create","user")}>
-                          Request Check-In
-                        </AppBtn>
-                      </Section>
-
-                      <Section label="Request Check-Out">
-                        <Box maxW="200px" mt={3}>
-                          <Field label="Visit ID" value={visitId} onChange={e=>setVisitId(e.target.value)} placeholder="101" type="number" />
-                        </Box>
-                        <AppBtn mt={4} color={C.blue} soft={C.blueSoft} icon={BellRing} outline loading={busy==="user:request"} onClick={()=>run("request","user")}>
-                          Request Check-Out
-                        </AppBtn>
-                      </Section>
-
-                      <Section label="Add-On Services">
-                        <SimpleGrid columns={{ base: 1, md: 2 }} spacing={3} mt={3} maxW="440px">
-                          <Field label="Visit ID" value={visitId} onChange={e=>setVisitId(e.target.value)} placeholder="101" type="number" />
-                          <FormControl>
-                            <FormLabel fontSize="11px" fontWeight="600" color={C.muted} letterSpacing="0.06em" mb={1.5}>Service</FormLabel>
-                            <Input list="uo" value={addon} onChange={e=>setAddon(e.target.value)}
-                              bg={C.surface} border={`1px solid ${C.border}`} borderRadius="9px"
-                              color={C.text} fontSize="13px"
-                              _focus={{ borderColor: C.borderFocus, boxShadow: "none" }} />
-                            <datalist id="uo">{ADD_ONS.map(o=><option key={o} value={o}/>)}</datalist>
-                          </FormControl>
-                        </SimpleGrid>
-                        <AppBtn mt={4} color={C.indigo} soft={C.indigoSoft} icon={Wrench} outline loading={busy==="user:addon"} onClick={()=>run("addon","user")}>
-                          Request Add-On
-                        </AppBtn>
-                      </Section>
-                    </Stack>
-                  )}
-
-                  {/* VALET */}
-                  {tab === "valet" && (
-                    <Stack spacing={6} divider={<Divider borderColor={C.border} />}>
-                      <Section label="Visit Actions">
-                        <Box maxW="200px" mt={3} mb={4}>
-                          <Field label="Visit ID" value={visitId} onChange={e=>setVisitId(e.target.value)} placeholder="101" type="number" />
-                        </Box>
-                        <Stack spacing={2}>
-                          <ActionRow color={C.teal}   soft={C.tealSoft}   icon={BadgeCheck}   title="Approve Request"  sub="Approve check-in and update status"   loading={busy==="valet:acknowledge"} onClick={()=>run("acknowledge","valet")} />
-                          <ActionRow color={C.green}  soft={C.greenSoft}  icon={CheckCircle2} title="Mark Ready"       sub="Vehicle serviced, awaiting pickup"     loading={busy==="valet:ready"}       onClick={()=>run("ready","valet")} />
-                          <ActionRow color={C.indigo} soft={C.indigoSoft} icon={CarFront}     title="Accept Checkout"  sub="Confirm handoff to customer"           loading={busy==="valet:checkout"}    onClick={()=>run("checkout","valet")} />
-                        </Stack>
-                      </Section>
-
-                      <Section label="Add-On Work">
-                        <SimpleGrid columns={{ base: 1, md: 2 }} spacing={3} mt={3} mb={4} maxW="440px">
-                          <Field label="Visit ID" value={visitId} onChange={e=>setVisitId(e.target.value)} placeholder="101" type="number" />
-                          <FormControl>
-                            <FormLabel fontSize="11px" fontWeight="600" color={C.muted} letterSpacing="0.06em" mb={1.5}>Service</FormLabel>
-                            <Input list="vo" value={addon} onChange={e=>setAddon(e.target.value)}
-                              bg={C.surface} border={`1px solid ${C.border}`} borderRadius="9px"
-                              color={C.text} fontSize="13px"
-                              _focus={{ borderColor: C.borderFocus, boxShadow: "none" }} />
-                            <datalist id="vo">{ADD_ONS.map(o=><option key={o} value={o}/>)}</datalist>
-                          </FormControl>
-                        </SimpleGrid>
-                        <Stack spacing={2}>
-                          <ActionRow color={C.blue}  soft={C.blueSoft}  icon={RefreshCw}    title="Load Add-Ons"    sub="View add-on requests for this visit"     loading={busy==="valet:loadAddOns"}    onClick={()=>run("loadAddOns","valet")} />
-                          <ActionRow color={C.amber} soft={C.amberSoft} icon={Wrench}       title="Start Add-On"   sub="Begin the selected extra service"         loading={busy==="valet:startAddOn"}    onClick={()=>run("startAddOn","valet")} />
-                          <ActionRow color={C.green} soft={C.greenSoft} icon={CheckCircle2} title="Complete Add-On" sub="Mark the extra feature complete"         loading={busy==="valet:completeAddOn"} onClick={()=>run("completeAddOn","valet")} />
-                        </Stack>
-                        {addOns.length > 0 && (
-                          <Stack spacing={2} mt={4}>
-                            {addOns.map(a => (
-                              <Flex key={a.id} align="center" justify="space-between" gap={3}
-                                px={3} py={2.5} border={`1px solid ${C.border}`} borderRadius="9px" bg={C.faint}>
-                                <Box>
-                                  <Text fontSize="13px" fontWeight="600" color={C.text}>{a.serviceName}</Text>
-                                  <Text fontSize="10px" color={C.muted}>Visit #{a.visitId} · {a.createdAt ?? "n/a"}</Text>
-                                </Box>
-                                <StatusPill status={a.status} />
-                              </Flex>
-                            ))}
-                          </Stack>
-                        )}
-                      </Section>
-                    </Stack>
-                  )}
-
-                  {/* ADMIN */}
-                  {tab === "admin" && (
-                    <Stack spacing={5}>
-                      <Flex justify="space-between" align="center">
-                        <SLabel>Live Vehicle Data</SLabel>
-                        <AppBtn color={C.amber} soft={C.amberSoft} icon={RefreshCw} size="sm"
-                          loading={busy==="admin:load"} onClick={()=>run("load","admin")}>
-                          Refresh
-                        </AppBtn>
-                      </Flex>
-                      <SimpleGrid columns={{ base: 1, md: 2 }} spacing={4}>
-                        <VehicleTable title="In Lot"      icon={Car}        iconColor={C.blue}   visits={active} />
-                        <VehicleTable title="All History" icon={TrendingUp} iconColor={C.indigo} visits={visits} />
-                      </SimpleGrid>
-                    </Stack>
-                  )}
-
-                  {/* TIMELINE */}
-                  {tab === "timeline" && (
-                    <Stack spacing={5}>
-                      <Section label="Look Up Visit">
-                        <HStack mt={3} spacing={3} align="flex-end" maxW="340px">
-                          <Box flex={1}>
-                            <Field label="Visit ID" value={tlId} onChange={e=>setTlId(e.target.value)} placeholder="101" type="number" />
-                          </Box>
-                          <AppBtn color={C.indigo} soft={C.indigoSoft} icon={CircleDot} loading={tlLoading} onClick={trackTimeline}>
-                            Track
-                          </AppBtn>
-                        </HStack>
-                      </Section>
-
-                      {!tlVisit && !tlLoading && (
-                        <Flex direction="column" align="center" gap={2} py={10}
-                          borderRadius="10px" bg={C.faint} border={`1.5px dashed ${C.border}`}>
-                          <Icon as={Clock} boxSize={6} color={C.muted} />
-                          <Text fontSize="12px" color={C.muted}>Enter a Visit ID to see its journey</Text>
-                        </Flex>
-                      )}
-
-                      {tlVisit && (
-                        <Stack spacing={4}>
-                          {/* Vehicle header */}
-                          <Flex align="center" gap={3} px={4} py={3}
-                            bg={C.faint} borderRadius="10px" border={`1px solid ${C.border}`}>
-                            <Flex w="42px" h="42px" borderRadius="10px" bg={C.blueSoft}
-                              align="center" justify="center" flexShrink={0}>
-                              <Icon as={CarFront} boxSize={5} color={C.blue} />
-                            </Flex>
-                            <Box flex={1} minW={0}>
-                              <Text fontWeight="800" fontSize="15px" color={C.text}>{tlVisit.vehicleNumber ?? "—"}</Text>
-                              <Text fontSize="12px" color={C.muted}>{tlVisit.customerName} · Visit #{tlVisit.id}</Text>
-                            </Box>
-                            <StatusPill status={tlVisit.status} />
-                          </Flex>
-
-                          {/* Step flow */}
-                          <Box overflowX="auto" py={1}>
-                            <HStack spacing={0} minW="540px">
-                              {STEPS.map((step, i) => {
-                                const order = STEPS.map(s => s.key);
-                                const cur   = order.indexOf(tlVisit.status);
-                                const done  = i <= cur;
-                                const now   = step.key === tlVisit.status;
-                                const cfg   = STATUS[step.key] ?? STATUS["CheckedOut"];
-                                return (
-                                  <Box key={step.key} flex={1} display="flex" flexDirection="column"
-                                    alignItems="center" position="relative">
-                                    {i < STEPS.length - 1 && (
-                                      <Box position="absolute" left="50%" top="18px" w="100%" h="2px"
-                                        bg={done && i < cur ? cfg.color : C.border} zIndex={0} />
-                                    )}
-                                    <Flex w="36px" h="36px" borderRadius="full"
-                                      bg={done ? cfg.soft : C.faint}
-                                      border={`2px solid ${done ? cfg.color : C.border}`}
-                                      align="center" justify="center"
-                                      position="relative" zIndex={1}
-                                      boxShadow={now ? `0 0 0 4px ${cfg.color}22` : "none"}
-                                      transition="all 0.2s">
-                                      <Icon as={step.icon} boxSize={3.5} color={done ? cfg.color : C.muted} />
-                                    </Flex>
-                                    <Text fontSize="10px" fontWeight={now ? "700" : "500"}
-                                      color={done ? C.text : C.muted} mt={1.5} textAlign="center" px={0.5}>
-                                      {step.label}
-                                    </Text>
-                                    {now && (
-                                      <Box mt={1} px={1.5} py={0.5} borderRadius="4px"
-                                        bg={cfg.color} fontSize="8px" fontWeight="700"
-                                        color="white" letterSpacing="0.06em">NOW</Box>
-                                    )}
-                                  </Box>
-                                );
-                              })}
-                            </HStack>
-                          </Box>
-
-                          {/* Detail chips */}
-                          <SimpleGrid columns={3} spacing={3}>
-                            {[
-                              { k: "Customer",   v: tlVisit.customerName ?? "—" },
-                              { k: "Mobile",     v: tlVisit.mobileNumber  ?? "—" },
-                              { k: "Checked In", v: tlVisit.createdAt     ?? "—" },
-                            ].map(d => (
-                              <Box key={d.k} bg={C.faint} border={`1px solid ${C.border}`}
-                                borderRadius="9px" p={3}>
-                                <Text fontSize="9px" fontWeight="700" color={C.muted}
-                                  letterSpacing="0.1em">{d.k.toUpperCase()}</Text>
-                                <Text fontSize="13px" fontWeight="600" mt={1} color={C.text}>{d.v}</Text>
-                              </Box>
-                            ))}
-                          </SimpleGrid>
-                        </Stack>
-                      )}
-                    </Stack>
-                  )}
-                </Card>
-              </GridItem>
-
-              {/* ── API Response ── */}
-              <GridItem>
-                <Box bg={C.surface} border={`1px solid ${C.border}`} borderRadius="12px"
-                  overflow="hidden" position={{ xl: "sticky" }} top={{ xl: "76px" }}>
-                  {/* Header */}
-                  <Flex px={4} py={3} bg={C.faint} borderBottom={`1px solid ${C.border}`}
-                    align="center" justify="space-between">
-                    <HStack spacing={2}>
-                      <Box w="6px" h="6px" borderRadius="full"
-                        bg={apiResp?.ok === false ? C.red : apiResp ? C.green : C.muted} />
-                      <Text fontSize="10px" fontWeight="700" color={C.muted} letterSpacing="0.1em">
-                        API RESPONSE
-                      </Text>
-                    </HStack>
-                    {apiResp && (
-                      <Box px={2} py={0.5} borderRadius="5px" fontSize="10px" fontWeight="700"
-                        letterSpacing="0.08em"
-                        bg={apiResp.ok ? C.greenSoft : C.redSoft}
-                        color={apiResp.ok ? C.green : C.red}
-                        border={`1px solid ${apiResp.ok ? C.green : C.red}30`}>
-                        {apiResp.ok ? "200 OK" : "ERROR"}
-                      </Box>
-                    )}
-                  </Flex>
-
-                  {apiResp ? (
-                    <>
-                      <Box px={4} py={3} borderBottom={`1px solid ${C.border}`}>
-                        <Text fontSize="12px" fontWeight="600" color={C.text}>{apiResp.label}</Text>
-                        <Text fontSize="11px" color={C.muted} mt={0.5}>{new Date().toLocaleTimeString()}</Text>
-                      </Box>
-                      <Box as="pre" px={4} py={4} fontSize="11px" color="#1d4ed8" bg="#f8faff"
-                        overflowX="auto" lineHeight="1.85" fontFamily="'JetBrains Mono',monospace"
-                        maxH="300px" overflowY="auto"
-                        sx={{ "&::-webkit-scrollbar": { width: "3px", height: "3px" },
-                              "&::-webkit-scrollbar-thumb": { background: C.border, borderRadius: "3px" } }}>
-                        {JSON.stringify(apiResp.body, null, 2)}
-                      </Box>
-                    </>
-                  ) : (
-                    <Flex direction="column" align="center" gap={2} py={10} px={5}>
-                      <Icon as={ArrowRight} boxSize={5} color={C.muted} />
-                      <Text fontSize="12px" color={C.muted} textAlign="center">
-                        Run an action to see the response
-                      </Text>
-                    </Flex>
-                  )}
-
-                  {/* Status legend */}
-                  <Box px={4} py={4} borderTop={`1px solid ${C.border}`} bg={C.faint}>
+ 
+                  {/* Integrated Status Legend */}
+                  <Box pt={3} mt={4} borderTop={`1px solid ${C.border}`}>
                     <Text fontSize="9px" fontWeight="700" color={C.muted}
-                      letterSpacing="0.14em" mb={2.5}>STATUS LEGEND</Text>
-                    <SimpleGrid columns={2} spacing={1.5}>
+                      letterSpacing="0.12em" mb={2}>STATUS LEGEND</Text>
+                    <SimpleGrid columns={{ base: 2, sm: 3, xl: 2, "2xl": 5 }} spacing={1.5}>
                       {Object.entries(STATUS).map(([k, v]) => (
                         <HStack key={k} spacing={1.5}>
-                          <Box w="6px" h="6px" borderRadius="full" bg={v.color} flexShrink={0} />
-                          <Text fontSize="10px" color={C.muted}>{v.label}</Text>
+                          <Box w="5.5px" h="5.5px" borderRadius="full" bg={v.color} flexShrink={0} />
+                          <Text fontSize="9.5px" color={C.sub} fontWeight="500" whiteSpace="nowrap">{v.label}</Text>
                         </HStack>
                       ))}
                     </SimpleGrid>
                   </Box>
-                </Box>
+                </Card>
               </GridItem>
             </Grid>
-
+ 
           </Stack>
         </Box>
       </Box>

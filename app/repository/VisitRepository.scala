@@ -50,8 +50,8 @@ class VisitRepository @Inject()(
       addOnRequests.schema.createIfNotExists
     ))
 
-  def insert(visit: Visit): Future[Int] =
-    db.run(visits += visit)
+  def insert(visit: Visit): Future[Long] =
+    db.run((visits returning visits.map(_.id)) += visit)
 
   def getAll(): Future[Seq[Visit]] =
     db.run(visits.result)
@@ -89,6 +89,9 @@ class VisitRepository @Inject()(
         .map(_.status)
         .update(nextStatus)
     )
+
+  def getAllAddOns(): Future[Seq[AddOnRequest]] =
+    db.run(addOnRequests.result)
 
   def findActiveVisitByVehicle(vehicleNumber: String): Future[Option[Visit]] =
     db.run(

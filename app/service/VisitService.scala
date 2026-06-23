@@ -3,7 +3,7 @@ package service
 import java.time.LocalDateTime
 import java.time.format.DateTimeFormatter
 import javax.inject._
-import models.{AddOnRequest, AddOnStatus, Visit}
+import models.{AddOnRequest, AddOnStatus, Visit, VisitWithAddOns}
 import repository.VisitRepository
 
 import scala.concurrent.ExecutionContext
@@ -16,7 +16,7 @@ class VisitService @Inject()(
   def initialize(): Future[Unit] =
     repo.createTable()
 
-  def checkIn(visit: Visit): Future[Int] = {
+  def checkIn(visit: Visit): Future[Long] = {
     if (!models.VisitStatus.allStatuses.contains(visit.status)) {
       Future.failed(new Exception("Invalid visit status"))
     } else {
@@ -43,6 +43,18 @@ class VisitService @Inject()(
 
   def getVisits(): Future[Seq[Visit]] =
     repo.getAll()
+
+  def getVisitsWithAddOns(): Future[Seq[VisitWithAddOns]] = {
+    for {
+      allVisits <- repo.getAll()
+      allAddOns <- repo.getAllAddOns()
+    } yield {
+      val addOnsByVisit = allAddOns.groupBy(_.visitId)
+      allVisits.map { v =>
+        VisitWithAddOns(v, addOnsByVisit.getOrElse(v.id, Seq.empty))
+      }
+    }
+  }
 
   def getVisitById(id: Long): Future[Option[Visit]] =
     repo.getById(id)
@@ -146,23 +158,49 @@ class VisitService @Inject()(
       case None    => Future.failed(new Exception(s"Visit with id $id not found"))
     }
 
-  def startAddOn(id: Long, serviceName: String): Future[String] =
-    updateAddOnStatus(
-      id = id,
-      serviceName = serviceName,
-      expectedStatus = AddOnStatus.Requested,
-      nextStatus = AddOnStatus.InProgress,
-      errorMessage = "Add-on can only be started from RequestedAddOn status"
-    )
+  def startAddOn(id: Long, serviceName: String): Future[String] = {
+    repo.getById(id).flatMap {
+      case Some(visit) =>
+        if (visit.status != models.VisitStatus.CheckedIn && visit.status != models.VisitStatus.InProgress) {
+          Future.failed(new Exception("Add-on service can only start after the vehicle is checked in"))
+        } else {
+          updateAddOnStatus(
+            id = id,
+            serviceName = serviceName,
+            expectedStatus = AddOnStatus.Requested,
+            nextStatus = AddOnStatus.InProgress,
+            errorMessage = "Add-on can only be started from RequestedAddOn status"
+          ).flatMap { successMessage =>
+            repo.updateStatus(id, models.VisitStatus.InProgress).map { _ =>
+              successMessage
+            }
+          }
+        }
+      case None =>
+        Future.failed(new Exception(s"Visit with id $id not found"))
+    }
+  }
 
-  def completeAddOn(id: Long, serviceName: String): Future[String] =
+  def completeAddOn(id: Long, serviceName: String): Future[String] = {
     updateAddOnStatus(
       id = id,
       serviceName = serviceName,
       expectedStatus = AddOnStatus.InProgress,
       nextStatus = AddOnStatus.Completed,
       errorMessage = "Add-on can only be completed from AddOnInProgress status"
-    )
+    ).flatMap { successMessage =>
+      repo.getAddOnsByVisitId(id).flatMap { addOns =>
+        val hasIncomplete = addOns.exists(a => a.status == AddOnStatus.Requested || a.status == AddOnStatus.InProgress)
+        if (!hasIncomplete) {
+          repo.updateStatus(id, models.VisitStatus.Ready).map { _ =>
+            successMessage
+          }
+        } else {
+          Future.successful(successMessage)
+        }
+      }
+    }
+  }
 
   def checkOut(id: Long): Future[Int] =
     acceptCheckoutRequest(id)
@@ -212,5 +250,5 @@ class VisitService @Inject()(
       }
     }
   }
-  
+
 }
