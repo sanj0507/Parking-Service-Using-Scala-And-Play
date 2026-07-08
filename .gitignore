@@ -1,12 +1,30 @@
-logs
-target
+logs/
+*.log
+target/
+project/target/
+project/project/
 /.bsp
+/.bloop
+/.metals
 /.idea
 /.idea_modules
 /.classpath
 /.project
 /.settings
 /RUNNING_PID
+
+# Node & Frontend
 node_modules/
 dist/
-.metals/
+build/
+.env
+.env.local
+.env.*.local
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+
+# OS Files
+.DS_Store
+Thumbs.db

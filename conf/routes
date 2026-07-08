@@ -12,6 +12,17 @@ GET     /valet                       controllers.HomeController.valet()
 GET     /admin                       controllers.HomeController.admin()
 
 + nocsrf
+POST    /api/login                   controllers.AuthController.login
+
++ nocsrf
+POST    /api/signup                  controllers.AuthController.signup
+
+GET     /api/admin/users/pending     controllers.AuthController.getPendingUsers
+
++ nocsrf
+POST    /api/admin/users/:id/role    controllers.AuthController.assignRole(id: Long)
+
++ nocsrf
 POST    /visits/check-in             controllers.VisitController.checkIn
 + nocsrf
 POST    /check-in                    controllers.VisitController.checkIn

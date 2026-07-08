@@ -42,7 +42,8 @@ class VisitController @Inject()(
         id = 0,
         vehicleNumber = (json \ "vehicleNumber").as[String],
         customerName = (json \ "customerName").as[String],
-        status = (json \ "status").as[String]
+        status = (json \ "status").as[String],
+        email = (json \ "email").asOpt[String].filter(_.trim.nonEmpty)
       )
 
       visitService.checkIn(visit).map { generatedId =>
@@ -62,7 +63,7 @@ class VisitController @Inject()(
   def getAllVisits = roleAction.async { request =>
     if (request.role.isEmpty) {
       unauthorized
-    } else if (!allowed(request.role, Set(Role.ServiceAdvisor, Role.Admin))) {
+    } else if (!allowed(request.role, Set(Role.Valet, Role.ServiceAdvisor, Role.Admin))) {
       forbidden
     } else {
       visitService.getVisitsWithAddOns().map { visits =>

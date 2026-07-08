@@ -1,41 +1,104 @@
 @()
 
 @main("Parking Service Dashboard") {
-  <div class="shell app-shell" data-role="Service Advisor">
+  <div class="shell app-shell">
     <header class="hero">
       <div>
         <p class="eyebrow">Parking Service Using Scala And Play</p>
-        <h1>Separated parking workflows</h1>
-        <p class="lede">Open the user, valet, or admin side from its own URL and use the workflow controls for that role.</p>
-      </div>
-      <div class="role-card">
-        <span class="role-label">Available URLs</span>
-        <div class="link-stack">
-          <a href="/user">User side</a>
-          <a href="/valet">Valet side</a>
-          <a href="/admin">Admin side</a>
-        </div>
+        <h1>Welcome to the Dashboard</h1>
+        <p class="lede">Sign in to access your workflow, or sign up to request access.</p>
       </div>
     </header>
 
-    <main class="grid workflow-grid">
-      <section class="panel workflow-panel">
-        <h2>User</h2>
-        <p>Check in vehicles, request vehicle return, and check out completed visits.</p>
-        <a class="panel-link" href="/user">Open user side</a>
-      </section>
-
-      <section class="panel workflow-panel">
-        <h2>Valet</h2>
-        <p>Acknowledge requested vehicles and mark them ready for check-out.</p>
-        <a class="panel-link" href="/valet">Open valet side</a>
-      </section>
-
-      <section class="panel workflow-panel">
-        <h2>Admin</h2>
-        <p>Load all visits and perform support actions across the full workflow.</p>
-        <a class="panel-link" href="/admin">Open admin side</a>
+    <main class="grid workflow-grid" style="grid-template-columns: 1fr; max-width: 500px; margin: 0 auto;">
+      <section class="panel workflow-panel" id="auth-panel">
+        <h2 id="auth-title">Sign In</h2>
+        <div id="auth-message" style="display:none; color: green; margin-bottom: 1rem;"></div>
+        <div id="auth-error" style="display:none; color: red; margin-bottom: 1rem;"></div>
+        
+        <form id="auth-form">
+          <div style="margin-bottom: 1rem;">
+            <label for="email" style="display: block; margin-bottom: 0.5rem;">Email</label>
+            <input type="email" id="email" required style="width: 100%; padding: 0.5rem; border: 1px solid #ccc; border-radius: 4px;">
+          </div>
+          <div style="margin-bottom: 1rem;">
+            <label for="password" style="display: block; margin-bottom: 0.5rem;">Password</label>
+            <input type="password" id="password" required style="width: 100%; padding: 0.5rem; border: 1px solid #ccc; border-radius: 4px;">
+          </div>
+          <button type="submit" id="submit-btn" style="padding: 0.75rem 1.5rem; background: var(--primary); color: white; border: none; border-radius: 4px; cursor: pointer; width: 100%;">Sign In</button>
+        </form>
+        
+        <p style="margin-top: 1rem; text-align: center;">
+          <a href="#" id="toggle-auth" style="color: var(--primary);">Need an account? Sign up</a>
+        </p>
       </section>
     </main>
   </div>
+
+  <script>
+    let isLogin = true;
+    const form = document.getElementById('auth-form');
+    const toggleBtn = document.getElementById('toggle-auth');
+    const title = document.getElementById('auth-title');
+    const submitBtn = document.getElementById('submit-btn');
+    const messageDiv = document.getElementById('auth-message');
+    const errorDiv = document.getElementById('auth-error');
+
+    toggleBtn.addEventListener('click', (e) => {
+      e.preventDefault();
+      isLogin = !isLogin;
+      title.innerText = isLogin ? 'Sign In' : 'Sign Up';
+      submitBtn.innerText = isLogin ? 'Sign In' : 'Sign Up';
+      toggleBtn.innerText = isLogin ? 'Need an account? Sign up' : 'Already have an account? Sign in';
+      messageDiv.style.display = 'none';
+      errorDiv.style.display = 'none';
+    });
+
+    form.addEventListener('submit', async (e) => {
+      e.preventDefault();
+      const email = document.getElementById('email').value;
+      const password = document.getElementById('password').value;
+      const endpoint = isLogin ? '/api/login' : '/api/signup';
+      
+      try {
+        const response = await fetch(endpoint, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ email, password })
+        });
+        const data = await response.json();
+        
+        if (response.ok) {
+          errorDiv.style.display = 'none';
+          if (isLogin) {
+            localStorage.setItem('token', data.token);
+            // Redirect based on role or simple reload if decoded manually.
+            // For now, let's redirect to user or valet based on their email for simplicity
+            // In a real app we decode JWT.
+            const base64Url = data.token.split('.')[1];
+            const base64 = base64Url.replace(/-/g, '+').replace(/_/g, '/');
+            const jwtPayload = JSON.parse(window.atob(base64));
+            
+            if (jwtPayload.role === 'Admin') window.location.href = '/admin';
+            else if (jwtPayload.role === 'Valet') window.location.href = '/valet';
+            else window.location.href = '/user';
+          } else {
+            messageDiv.innerText = data.message;
+            messageDiv.style.display = 'block';
+            form.reset();
+            isLogin = true; // Switch back to login
+            title.innerText = 'Sign In';
+            submitBtn.innerText = 'Sign In';
+            toggleBtn.innerText = 'Need an account? Sign up';
+          }
+        } else {
+          errorDiv.innerText = data.error || 'An error occurred';
+          errorDiv.style.display = 'block';
+        }
+      } catch (err) {
+        errorDiv.innerText = 'Network error';
+        errorDiv.style.display = 'block';
+      }
+    });
+  </script>
 }

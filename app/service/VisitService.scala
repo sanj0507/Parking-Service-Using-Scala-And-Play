@@ -4,14 +4,20 @@ import java.time.LocalDateTime
 import java.time.format.DateTimeFormatter
 import javax.inject._
 import models.{AddOnRequest, AddOnStatus, Visit, VisitWithAddOns}
+import play.api.cache.AsyncCacheApi
+import play.api.libs.json.Json
 import repository.VisitRepository
+
+import scala.concurrent.duration._
 
 import scala.concurrent.ExecutionContext
 import scala.concurrent.Future
 
 @Singleton
 class VisitService @Inject()(
-    repo: VisitRepository
+    repo: VisitRepository,
+    cache: AsyncCacheApi,
+    kafkaService: KafkaProducerService
 )(implicit ec: ExecutionContext) {
   def initialize(): Future[Unit] =
     repo.createTable()
@@ -36,7 +42,9 @@ class VisitService @Inject()(
             status = models.VisitStatus.RequestedCheckIn,
             createdAt = currentTime
           )
-          repo.insert(updatedVisit)
+          repo.insert(updatedVisit).flatMap { id =>
+            cache.remove("visits-with-addons").map(_ => id)
+          }
       }
     }
   }
@@ -44,14 +52,17 @@ class VisitService @Inject()(
   def getVisits(): Future[Seq[Visit]] =
     repo.getAll()
 
+  //caching implementation with TTL 1hr
   def getVisitsWithAddOns(): Future[Seq[VisitWithAddOns]] = {
-    for {
-      allVisits <- repo.getAll()
-      allAddOns <- repo.getAllAddOns()
-    } yield {
-      val addOnsByVisit = allAddOns.groupBy(_.visitId)
-      allVisits.map { v =>
-        VisitWithAddOns(v, addOnsByVisit.getOrElse(v.id, Seq.empty))
+    cache.getOrElseUpdate("visits-with-addons", 1.hour) {
+      for {
+        allVisits <- repo.getAll()
+        allAddOns <- repo.getAllAddOns()
+      } yield {
+        val addOnsByVisit = allAddOns.groupBy(_.visitId)
+        allVisits.map { v =>
+          VisitWithAddOns(v, addOnsByVisit.getOrElse(v.id, Seq.empty))
+        }
       }
     }
   }
@@ -74,16 +85,24 @@ class VisitService @Inject()(
       nextStatus = models.VisitStatus.RequestedCheckout,
       errorMessage = "Vehicle can only request checkout from Ready status"
     )
-
+  //kafka implementation
   def acknowledgeRequest(id: Long): Future[Int] =
     repo.getById(id).flatMap {
       case Some(visit) =>
         visit.status match {
           case models.VisitStatus.RequestedCheckIn =>
-            repo.updateStatus(id, models.VisitStatus.CheckedIn)
+            repo.updateStatus(id, models.VisitStatus.CheckedIn).flatMap { res =>
+              val time = LocalDateTime.now().format(DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss"))
+              val payload = Json.obj(
+                "email" -> play.api.libs.json.JsString(visit.email.getOrElse("")),
+                "message" -> play.api.libs.json.JsString(s"your vehicle ${visit.vehicleNumber} has been accepted for check-in at $time")
+              ).toString()
+              kafkaService.sendEmailNotification(payload)
+              cache.remove("visits-with-addons").map(_ => res)
+            }
 
           case models.VisitStatus.Requested =>
-            repo.updateStatus(id, models.VisitStatus.InProgress)
+            repo.updateStatus(id, models.VisitStatus.InProgress).flatMap(res => cache.remove("visits-with-addons").map(_ => res))
 
           case _ =>
             Future.failed(
@@ -97,20 +116,43 @@ class VisitService @Inject()(
         Future.failed(new Exception(s"Visit with id $id not found"))
     }
 
+  //kafka implementation
   def acceptCheckoutRequest(id: Long): Future[Int] =
     updateVisitStatus(
       id = id,
       expectedStatus = models.VisitStatus.RequestedCheckout,
       nextStatus = models.VisitStatus.CheckedOut,
       errorMessage = "Vehicle can only be checked out after a checkout request"
-    )
+    ).flatMap { res =>
+      repo.getById(id).map {
+        case Some(visit) =>
+          val payload = Json.obj(
+            "email" -> play.api.libs.json.JsString(visit.email.getOrElse("")),
+            "message" -> play.api.libs.json.JsString(s"your vehicle ${visit.vehicleNumber} has been succesfully checked-out. Thank u for using our service")
+          ).toString()
+          kafkaService.sendEmailNotification(payload)
+        case None =>
+      }
+      Future.successful(res)
+    }
 
+  //kafka implementation
   def markReady(id: Long): Future[Int] =
     repo.getById(id).flatMap {
       case Some(visit) =>
         visit.status match {
           case models.VisitStatus.CheckedIn | models.VisitStatus.InProgress =>
-            repo.updateStatus(id, models.VisitStatus.Ready)
+            repo.updateStatus(id, models.VisitStatus.Ready).flatMap { res =>
+              val payload = Json.obj(
+                "email" -> play.api.libs.json.JsString(visit.email.getOrElse("")),
+                "message" -> play.api.libs.json.JsString(s"your vehicle ${visit.vehicleNumber} has been serviced and is now ready for check-out")
+              ).toString()
+              kafkaService.sendEmailNotification(payload)
+              cache.remove("visits-with-addons").map(_ => res)
+            }
+
+          case models.VisitStatus.Ready =>
+            Future.successful(1)
 
           case _ =>
             Future.failed(
@@ -144,7 +186,7 @@ class VisitService @Inject()(
               status = AddOnStatus.Requested,
               createdAt = currentTime
             )
-          ).map(_ => s"Add-on service '$normalizedServiceName' requested for visit $id")
+          ).flatMap(_ => cache.remove("visits-with-addons")).map(_ => s"Add-on service '$normalizedServiceName' requested for visit $id")
         }
 
       case None =>
@@ -161,8 +203,8 @@ class VisitService @Inject()(
   def startAddOn(id: Long, serviceName: String): Future[String] = {
     repo.getById(id).flatMap {
       case Some(visit) =>
-        if (visit.status != models.VisitStatus.CheckedIn && visit.status != models.VisitStatus.InProgress) {
-          Future.failed(new Exception("Add-on service can only start after the vehicle is checked in"))
+        if (visit.status == models.VisitStatus.CheckedOut || visit.status == models.VisitStatus.RequestedCheckIn) {
+          Future.failed(new Exception("Add-on service can only start after the vehicle is checked in and before checkout"))
         } else {
           updateAddOnStatus(
             id = id,
@@ -171,8 +213,8 @@ class VisitService @Inject()(
             nextStatus = AddOnStatus.InProgress,
             errorMessage = "Add-on can only be started from RequestedAddOn status"
           ).flatMap { successMessage =>
-            repo.updateStatus(id, models.VisitStatus.InProgress).map { _ =>
-              successMessage
+            repo.updateStatus(id, models.VisitStatus.InProgress).flatMap { _ =>
+              cache.remove("visits-with-addons").map(_ => successMessage)
             }
           }
         }
@@ -192,8 +234,17 @@ class VisitService @Inject()(
       repo.getAddOnsByVisitId(id).flatMap { addOns =>
         val hasIncomplete = addOns.exists(a => a.status == AddOnStatus.Requested || a.status == AddOnStatus.InProgress)
         if (!hasIncomplete) {
-          repo.updateStatus(id, models.VisitStatus.Ready).map { _ =>
-            successMessage
+          repo.updateStatus(id, models.VisitStatus.Ready).flatMap { _ =>
+            repo.getById(id).map {
+              case Some(v) => 
+                val payload = Json.obj(
+                  "email" -> play.api.libs.json.JsString(v.email.getOrElse("")),
+                  "message" -> play.api.libs.json.JsString(s"your vehicle ${v.vehicleNumber} has been serviced and is now ready for check-out")
+                ).toString()
+                kafkaService.sendEmailNotification(payload)
+              case None =>
+            }
+            cache.remove("visits-with-addons").map(_ => successMessage)
           }
         } else {
           Future.successful(successMessage)
@@ -216,7 +267,7 @@ class VisitService @Inject()(
         if (visit.status != expectedStatus) {
           Future.failed(new Exception(errorMessage))
         } else {
-          repo.updateStatus(id, nextStatus)
+          repo.updateStatus(id, nextStatus).flatMap(res => cache.remove("visits-with-addons").map(_ => res))
         }
 
       case None =>
@@ -243,7 +294,7 @@ class VisitService @Inject()(
         nextStatus = nextStatus
       ).flatMap {
         case updated if updated > 0 =>
-          Future.successful(s"Add-on service '$normalizedServiceName' moved to $nextStatus for visit $id")
+          cache.remove("visits-with-addons").map(_ => s"Add-on service '$normalizedServiceName' moved to $nextStatus for visit $id")
 
         case _ =>
           Future.failed(new Exception(errorMessage))

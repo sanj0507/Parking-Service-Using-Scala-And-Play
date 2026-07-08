@@ -1,6 +1,6 @@
 import {
   Box, Button, Divider, Flex, FormControl, FormLabel,
-  Grid, GridItem, HStack, Icon, Input, SimpleGrid,
+  Grid, GridItem, HStack, Icon, Input, Select, SimpleGrid,
   Stack, Text, VStack, useToast
 } from "@chakra-ui/react";
 import {
@@ -10,59 +10,61 @@ import {
   UserRoundCheck, Wrench, Zap, ArrowRight
 } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
+import { BrowserRouter, Routes, Route, Navigate, useNavigate } from "react-router-dom";
 import { parkingApi } from "./api/parkingApi.js";
+import Login from "./Login.jsx";
 
 /* ─── Palette ────────────────────────────────────────────────── */
 const C = {
-  bg:          "#f0f3f8",
-  surface:     "#ffffff",
-  faint:       "#f7f8fb",
-  border:      "#e4e7f0",
+  bg: "#f0f3f8",
+  surface: "#ffffff",
+  faint: "#f7f8fb",
+  border: "#e4e7f0",
   borderFocus: "#bdc3d8",
-  text:        "#0f1623",
-  sub:         "#4b5568",
-  muted:       "#8a92a8",
+  text: "#0f1623",
+  sub: "#4b5568",
+  muted: "#8a92a8",
 
-  sidebar:     "#0f1623",
-  sidebarSub:  "#1c2540",
+  sidebar: "#0f1623",
+  sidebarSub: "#1c2540",
   sidebarLine: "#253045",
-  sidebarMuted:"#5a6480",
+  sidebarMuted: "#5a6480",
   sidebarText: "#c8d0e4",
 
-  blue:   "#2563eb", blueSoft:   "#eff6ff",
-  teal:   "#0d9488", tealSoft:   "#f0fdfa",
-  amber:  "#d97706", amberSoft:  "#fffbeb",
+  blue: "#2563eb", blueSoft: "#eff6ff",
+  teal: "#0d9488", tealSoft: "#f0fdfa",
+  amber: "#d97706", amberSoft: "#fffbeb",
   indigo: "#6366f1", indigoSoft: "#eef2ff",
-  green:  "#16a34a", greenSoft:  "#f0fdf4",
-  gray:   "#6b7280", graySoft:   "#f9fafb",
-  red:    "#dc2626", redSoft:    "#fef2f2",
+  green: "#16a34a", greenSoft: "#f0fdf4",
+  gray: "#6b7280", graySoft: "#f9fafb",
+  red: "#dc2626", redSoft: "#fef2f2",
 };
 
 /* ─── Status map ─────────────────────────────────────────────── */
 const STATUS = {
-  RequestedCheckIn: { label: "Check-In Req",  color: C.teal,   soft: C.tealSoft   },
-  CheckedIn:        { label: "Checked In",    color: C.blue,   soft: C.blueSoft   },
-  Requested:        { label: "Requested",     color: C.blue,   soft: C.blueSoft   },
-  RequestedCheckout: { label: "Checkout Req", color: C.blue,   soft: C.blueSoft   },
-  Acknowledged:     { label: "Acknowledged",  color: C.amber,  soft: C.amberSoft  },
-  InProgress:       { label: "In Progress",   color: C.amber,  soft: C.amberSoft  },
-  Ready:            { label: "Ready",         color: C.green,  soft: C.greenSoft  },
-  AddOn:            { label: "Add-on",        color: C.indigo, soft: C.indigoSoft },
-  RequestedAddOn:   { label: "Add-on",        color: C.indigo, soft: C.indigoSoft },
-  AddOnInProgress:  { label: "Add-On Active", color: C.indigo, soft: C.indigoSoft },
-  AddOnCompleted:   { label: "Add-On Done",   color: C.green,  soft: C.greenSoft  },
-  CheckedOut:       { label: "Checked Out",   color: C.gray,   soft: C.graySoft   },
+  RequestedCheckIn: { label: "Check-In Req", color: C.teal, soft: C.tealSoft },
+  CheckedIn: { label: "Checked In", color: C.blue, soft: C.blueSoft },
+  Requested: { label: "Requested", color: C.blue, soft: C.blueSoft },
+  RequestedCheckout: { label: "Checkout Req", color: C.blue, soft: C.blueSoft },
+  Acknowledged: { label: "Acknowledged", color: C.amber, soft: C.amberSoft },
+  InProgress: { label: "In Progress", color: C.amber, soft: C.amberSoft },
+  Ready: { label: "Ready", color: C.green, soft: C.greenSoft },
+  AddOn: { label: "Add-on", color: C.indigo, soft: C.indigoSoft },
+  RequestedAddOn: { label: "Add-on", color: C.indigo, soft: C.indigoSoft },
+  AddOnInProgress: { label: "Add-On Active", color: C.indigo, soft: C.indigoSoft },
+  AddOnCompleted: { label: "Add-On Done", color: C.green, soft: C.greenSoft },
+  CheckedOut: { label: "Checked Out", color: C.gray, soft: C.graySoft },
 };
 
 /* ─── Timeline steps ─────────────────────────────────────────── */
 const STEPS = [
-  { key: "RequestedCheckIn", label: "Requested",    icon: BellRing,     desc: "Check-in submitted" },
-  { key: "CheckedIn",        label: "Checked In",   icon: Car,          desc: "Entered lot" },
-  { key: "Acknowledged",     label: "Acknowledged", icon: BadgeCheck,   desc: "Valet confirmed" },
-  { key: "InProgress",       label: "In Service",   icon: Wrench,       desc: "Service underway" },
-  { key: "Ready",            label: "Ready",        icon: CheckCircle2, desc: "Awaiting pickup" },
-  { key: "RequestedCheckout", label: "Checkout Req", icon: BellRing,     desc: "Customer on way" },
-  { key: "CheckedOut",       label: "Departed",     icon: LogOut,       desc: "Left lot" },
+  { key: "RequestedCheckIn", label: "Requested", icon: BellRing, desc: "Check-in submitted" },
+  { key: "CheckedIn", label: "Checked In", icon: Car, desc: "Entered lot" },
+  { key: "Acknowledged", label: "Acknowledged", icon: BadgeCheck, desc: "Valet confirmed" },
+  { key: "InProgress", label: "In Service", icon: Wrench, desc: "Service underway" },
+  { key: "Ready", label: "Ready", icon: CheckCircle2, desc: "Awaiting pickup" },
+  { key: "RequestedCheckout", label: "Checkout Req", icon: BellRing, desc: "Customer on way" },
+  { key: "CheckedOut", label: "Departed", icon: LogOut, desc: "Left lot" },
 ];
 
 /* ─── Constants ──────────────────────────────────────────────── */
@@ -71,25 +73,41 @@ const ADD_ONS = ["Car Service", "Washing", "Cleaning"];
 
 // Each zone owns a set of statuses — vehicles are routed by their current status
 const ZONES = [
-  { key: "A", label: "Entry Row",   range: [1,  10], statuses: ["RequestedCheckIn", "CheckedIn"],              color: C.blue   },
-  { key: "B", label: "Service Bay", range: [11, 20], statuses: ["Acknowledged", "InProgress"],                color: C.amber  },
-  { key: "C", label: "Wash Lane",   range: [21, 30], statuses: ["AddOn", "AddOnInProgress", "AddOnCompleted"], color: C.indigo },
-  { key: "D", label: "Ready Lane",  range: [31, 40], statuses: ["Ready", "Requested", "RequestedCheckout"],    color: C.green  },
-  { key: "E", label: "Exit Row",    range: [41, 50], statuses: ["CheckedOut"],                                 color: C.gray   },
+  { key: "A", label: "Entry Row", range: [1, 10], statuses: ["RequestedCheckIn", "CheckedIn"], color: C.blue },
+  { key: "B", label: "Service Bay", range: [11, 20], statuses: ["Acknowledged", "InProgress"], color: C.amber },
+  { key: "C", label: "Wash Lane", range: [21, 30], statuses: ["AddOn", "AddOnInProgress", "AddOnCompleted"], color: C.indigo },
+  { key: "D", label: "Ready Lane", range: [31, 40], statuses: ["Ready", "Requested", "RequestedCheckout"], color: C.green },
+  { key: "E", label: "Exit Row", range: [41, 50], statuses: ["CheckedOut"], color: C.gray },
 ];
 
 const NAV = [
-  { key: "user",     label: "Service Advisor", icon: UserRoundCheck, color: C.blue   },
-  { key: "valet",    label: "Valet",           icon: KeyRound,       color: C.teal   },
-  { key: "admin",    label: "Admin",           icon: ShieldCheck,    color: C.amber  },
-  { key: "timeline", label: "Vehicle Tracker", icon: Clock,          color: C.indigo },
+  { key: "user", label: "Service Advisor", icon: UserRoundCheck, color: C.blue, path: "/advisor" },
+  { key: "valet", label: "Valet", icon: KeyRound, color: C.teal, path: "/valet" },
+  { key: "admin", label: "Admin", icon: ShieldCheck, color: C.amber, path: "/admin" }
 ];
+const SUB_TABS = {
+  user: [
+    { key: "check_in", label: "Request Check-In", icon: CarFront },
+    { key: "check_out", label: "Request Check-Out", icon: BellRing },
+    { key: "add_on", label: "Add-On Services", icon: Wrench },
+    { key: "tracker", label: "Vehicle Tracker", icon: Clock }
+  ],
+  valet: [
+    { key: "visit_actions", label: "Visit Actions", icon: BadgeCheck },
+    { key: "add_on_work", label: "Add-On Work", icon: Wrench }
+  ],
+  admin: [
+    { key: "live_data", label: "Live Vehicle Data", icon: TrendingUp },
+    { key: "tracker", label: "Vehicle Tracker", icon: Clock },
+    { key: "pending_users", label: "Pending Signups", icon: UserRoundCheck }
+  ]
+};
 const ACT = {
-  create: "Check-In Requested",   acknowledge: "Request Approved",
-  ready:  "Vehicle Ready",        checkout:    "Checked Out",
-  request:"Checkout Requested",   addon:       "Add-On Requested",
-  loadAddOns:"Add-Ons Loaded",    startAddOn:  "Add-On Started",
-  completeAddOn:"Add-On Finished", load:      "Visits Loaded",
+  create: "Check-In Requested", acknowledge: "Request Approved",
+  ready: "Vehicle Ready", checkout: "Checked Out",
+  request: "Checkout Requested", addon: "Add-On Requested",
+  loadAddOns: "Add-Ons Loaded", startAddOn: "Add-On Started",
+  completeAddOn: "Add-On Finished", load: "Visits Loaded",
 };
 
 function getVirtualStatus(v) {
@@ -105,15 +123,8 @@ function getVirtualStatus(v) {
     }
   }
 
-  // 2. Pending Add-ons
-  const pendingAddOn = v.addOns?.find(a => a.status === "RequestedAddOn");
-  if (pendingAddOn) {
-    if (pendingAddOn.serviceName === "Washing" || pendingAddOn.serviceName === "Cleaning") {
-      return "AddOn"; // Wash Lane pending
-    } else {
-      return "Acknowledged"; // Service Bay pending
-    }
-  }
+  // Pending Add-ons no longer move the vehicle to the service/wash lanes.
+  // The vehicle will only move when the Valet explicitly starts the add-on (AddOnInProgress).
 
   // 3. Completed Add-ons (and still CheckedIn)
   const completedAddOn = v.addOns?.find(a => a.status === "AddOnCompleted");
@@ -140,12 +151,12 @@ function buildSlots(allVisits) {
 
   // Build all 50 slot objects
   return Array.from({ length: TOTAL }, (_, i) => {
-    const n    = i + 1;
+    const n = i + 1;
     const zone = ZONES.find(z => n >= z.range[0] && n <= z.range[1]);
     const zKey = zone?.key ?? "A";
     // Position within the zone (0-based)
     const posInZone = n - zone.range[0];
-    const vehicle   = buckets[zKey][posInZone] ?? null;
+    const vehicle = buckets[zKey][posInZone] ?? null;
     return {
       id: n,
       code: `${zKey}-${String(n).padStart(2, "0")}`,
@@ -156,19 +167,79 @@ function buildSlots(allVisits) {
   });
 }
 
-/* ─── App ────────────────────────────────────────────────────── */
+/**
+ * ProtectedRoute Component
+ * Wraps routes that require authentication and role-based access control.
+ * Validates the JWT token and redirects unauthorized users.
+ * @param {Object} props
+ * @param {ReactNode} props.children - The component to render if authorized.
+ * @param {string} props.allowedRole - The role allowed to access the route.
+ */
+function ProtectedRoute({ children, allowedRole }) {
+  const token = localStorage.getItem("token");
+  if (!token) return <Navigate to="/login" replace />;
+
+  try {
+    const payload = JSON.parse(atob(token.split(".")[1]));
+    const userRole = payload.role;
+
+    if (allowedRole && allowedRole !== "any" && allowedRole !== userRole) {
+      if (userRole === "Admin") return <Navigate to="/admin" replace />;
+      if (userRole === "Valet") return <Navigate to="/valet" replace />;
+      if (userRole === "Service Advisor") return <Navigate to="/advisor" replace />;
+      return <Navigate to="/login" replace />;
+    }
+  } catch (e) {
+    localStorage.removeItem("token");
+    return <Navigate to="/login" replace />;
+  }
+
+  return children;
+}
+
+/**
+ * App Component
+ * The main application router.
+ * Defines the public login route and protected routes for different roles.
+ */
 export default function App() {
-  const [tab, setTab]         = useState("user");
-  const [visitId, setVisitId] = useState("");
-  const [tlId, setTlId]       = useState("");
+  return (
+    <BrowserRouter>
+      <Routes>
+        <Route path="/login" element={<Login />} />
+        <Route path="/admin" element={<ProtectedRoute allowedRole="Admin"><Dashboard tabName="admin" /></ProtectedRoute>} />
+        <Route path="/valet" element={<ProtectedRoute allowedRole="Valet"><Dashboard tabName="valet" /></ProtectedRoute>} />
+        <Route path="/advisor" element={<ProtectedRoute allowedRole="Service Advisor"><Dashboard tabName="user" /></ProtectedRoute>} />
+        <Route path="/timeline" element={<ProtectedRoute allowedRole="Admin"><Dashboard tabName="timeline" /></ProtectedRoute>} />
+        <Route path="*" element={<Navigate to="/login" replace />} />
+      </Routes>
+    </BrowserRouter>
+  );
+}
+
+/**
+ * Dashboard Component
+ * Renders the main user interface based on the active role/tab (admin, valet, user, or timeline).
+ * It manages the state for visits, add-ons, form inputs, and API responses.
+ * @param {Object} props
+ * @param {string} props.tabName - The current active tab/role for the dashboard.
+ */
+function Dashboard({ tabName }) {
+  const navigate = useNavigate();
+  const [tab, setTab] = useState(tabName);
+  const availableSubTabs = SUB_TABS[tabName] || [];
+  const [subTab, setSubTab] = useState(availableSubTabs[0]?.key);
+  const [visitInput, setVisitInput] = useState("");
+  const [tlInput, setTlInput] = useState("");
   const [tlVisit, setTlVisit] = useState(null);
   const [tlLoading, setTlLoading] = useState(false);
-  const [form, setForm]       = useState({ vehicleNumber: "", customerName: "", mobileNumber: "" });
-  const [addon, setAddon]     = useState(ADD_ONS[0]);
+  const [form, setForm] = useState({ vehicleNumber: "", customerName: "", mobileNumber: "", email: "" });
+  const [addon, setAddon] = useState(ADD_ONS[0]);
   const [apiResp, setApiResp] = useState(null);
-  const [visits, setVisits]   = useState([]);
-  const [addOns, setAddOns]   = useState([]);
-  const [busy, setBusy]       = useState("");
+  const [visits, setVisits] = useState([]);
+  const [addOns, setAddOns] = useState([]);
+  const [pendingUsers, setPendingUsers] = useState([]);
+  const [busy, setBusy] = useState("");
   const [lastCheckedInVisit, setLastCheckedInVisit] = useState(null);
   const toast = useToast();
 
@@ -177,28 +248,40 @@ export default function App() {
     go("load", "admin").catch(err => console.error("Error loading initial visits:", err));
   }, []);
 
-  const nav    = NAV.find(n => n.key === tab) ?? NAV[0];
-  const role   = tab === "timeline" ? "admin" : tab;
+  const nav = NAV.find(n => n.key === tab) ?? NAV[0];
+  const role = tab;
   const active = visits.filter(v => v.status !== "CheckedOut");
-  const slots  = useMemo(() => buildSlots(visits), [visits]);
-  const m      = useMemo(() => ({
-    active:  visits.filter(v => v.status !== "CheckedOut").length,
-    waiting: visits.filter(v => ["RequestedCheckIn","Requested"].includes(v.status)).length,
-    ready:   visits.filter(v => v.status === "Ready").length,
-    done:    visits.filter(v => v.status === "CheckedOut").length,
-    free:    Math.max(0, TOTAL - visits.filter(v => v.status !== "CheckedOut").length),
+  const slots = useMemo(() => buildSlots(visits), [visits]);
+  const m = useMemo(() => ({
+    active: visits.filter(v => v.status !== "CheckedOut").length,
+    waiting: visits.filter(v => ["RequestedCheckIn", "Requested"].includes(v.status)).length,
+    ready: visits.filter(v => v.status === "Ready").length,
+    done: visits.filter(v => v.status === "CheckedOut").length,
+    free: Math.max(0, TOTAL - visits.filter(v => v.status !== "CheckedOut").length),
   }), [visits]);
 
-  // Load add-ons automatically when visitId or tab changes
+  function resolveVisitId(identifier) {
+    if (!identifier) return null;
+    const str = identifier.toString().trim();
+    if (/^\d+$/.test(str)) return parseInt(str, 10);
+    const activeVisit = visits.find(v => v.vehicleNumber === str.toUpperCase() && v.status !== "CheckedOut");
+    if (activeVisit) return activeVisit.id;
+    const anyVisit = [...visits].reverse().find(v => v.vehicleNumber === str.toUpperCase());
+    return anyVisit ? anyVisit.id : null;
+  }
+
+  const actualVisitId = useMemo(() => resolveVisitId(visitInput), [visitInput, visits]);
+
+  // Load add-ons automatically when actualVisitId or tab changes
   useEffect(() => {
-    if (visitId && (tab === "valet" || tab === "user")) {
-      parkingApi.getAddOns(role, visitId)
+    if (actualVisitId && (tab === "valet" || tab === "user")) {
+      parkingApi.getAddOns(role, actualVisitId)
         .then(res => setAddOns(res.body?.data ?? []))
         .catch(() => setAddOns([]));
     } else {
       setAddOns([]);
     }
-  }, [visitId, tab, role]);
+  }, [actualVisitId, tab, role]);
 
   async function run(action, r = role) {
     setBusy(`${r}:${action}`);
@@ -220,7 +303,7 @@ export default function App() {
           title = "Check-In Created";
           desc = `Assigned Visit ID: ${generatedId}`;
           // Clear the form
-          setForm({ vehicleNumber: "", customerName: "", mobileNumber: "" });
+          setForm({ vehicleNumber: "", customerName: "", mobileNumber: "", email: "" });
         }
       }
 
@@ -236,9 +319,9 @@ export default function App() {
       // Auto reload lot map after each change (except loading actions)
       if (action !== "load" && action !== "loadAddOns") {
         await go("load", "admin");
-        if (visitId && (tab === "valet" || tab === "user")) {
+        if (actualVisitId && (tab === "valet" || tab === "user")) {
           try {
-            const res = await parkingApi.getAddOns(role, visitId);
+            const res = await parkingApi.getAddOns(role, actualVisitId);
             setAddOns(res.body?.data ?? []);
           } catch (e) {
             // ignore
@@ -246,33 +329,43 @@ export default function App() {
         }
       }
     } catch (e) {
+      if (e.message.includes("401") || e.message.includes("missing or invalid")) {
+        localStorage.removeItem("token");
+        navigate("/login");
+      }
       setApiResp({ ok: false, label: "Failed", body: { error: e.message } });
       toast({ title: "Failed", description: e.message, status: "error", duration: 3000, isClosable: true, position: "bottom-right" });
     } finally { setBusy(""); }
   }
 
   async function go(action, r) {
-    if (!["load","create"].includes(action) && !visitId) throw new Error("Visit ID required");
+    if (!["load", "create", "loadPendingUsers"].includes(action) && !actualVisitId) throw new Error("Invalid Visit ID or Vehicle Number");
     switch (action) {
       case "create":
         if (!form.vehicleNumber.trim()) throw new Error("Vehicle number required");
-        if (!form.customerName.trim())  throw new Error("Customer name required");
+        if (!/^[A-Z0-9]{4,10}$/.test(form.vehicleNumber)) throw new Error("Invalid vehicle number format (e.g. TN01AB1234)");
+        if (!form.customerName.trim()) throw new Error("Customer name required");
         return parkingApi.createVisit(r, { ...form, status: "RequestedCheckIn" });
-      case "acknowledge":   return parkingApi.acknowledge(r, visitId);
-      case "ready":         return parkingApi.markReady(r, visitId);
-      case "request":       return parkingApi.requestCheckout(r, visitId);
-      case "checkout":      return parkingApi.checkOut(r, visitId);
-      case "addon":         return parkingApi.addOn(r, visitId, addon);
+      case "acknowledge": return parkingApi.acknowledge(r, actualVisitId);
+      case "ready": return parkingApi.markReady(r, actualVisitId);
+      case "request": return parkingApi.requestCheckout(r, actualVisitId);
+      case "checkout": return parkingApi.checkOut(r, actualVisitId);
+      case "addon": return parkingApi.addOn(r, actualVisitId, addon);
       case "loadAddOns": {
-        const res = await parkingApi.getAddOns(r, visitId);
+        const res = await parkingApi.getAddOns(r, actualVisitId);
         setAddOns(res.body?.data ?? []);
         return res;
       }
-      case "startAddOn":    return parkingApi.startAddOn(r, visitId, addon);
-      case "completeAddOn": return parkingApi.completeAddOn(r, visitId, addon);
+      case "startAddOn": return parkingApi.startAddOn(r, actualVisitId, addon);
+      case "completeAddOn": return parkingApi.completeAddOn(r, actualVisitId, addon);
       case "load": {
         const res = await parkingApi.loadVisits();
         setVisits(res.body?.data ?? []);
+        return res;
+      }
+      case "loadPendingUsers": {
+        const res = await parkingApi.getPendingUsers();
+        setPendingUsers(res.body ?? []);
         return res;
       }
       default: throw new Error("Unknown action");
@@ -280,10 +373,11 @@ export default function App() {
   }
 
   async function trackTimeline() {
-    if (!tlId) { toast({ title: "Enter a Visit ID", status: "warning", duration: 2000, position: "bottom-right" }); return; }
+    const actualTlId = resolveVisitId(tlInput);
+    if (!actualTlId) { toast({ title: "Enter a valid Visit ID or Vehicle Number", status: "warning", duration: 2000, position: "bottom-right" }); return; }
     setTlLoading(true);
     try {
-      const r = await parkingApi.getVisit("admin", tlId);
+      const r = await parkingApi.getVisit("admin", actualTlId);
       setTlVisit(r.body?.data ?? r.body ?? null);
     } catch (e) {
       toast({ title: "Not found", description: e.message, status: "error", duration: 3000, position: "bottom-right" });
@@ -292,6 +386,11 @@ export default function App() {
   }
 
   const occupancy = Math.round(m.active / TOTAL * 100);
+
+  const handleLogout = () => {
+    localStorage.removeItem("token");
+    navigate("/login");
+  };
 
   return (
     <Flex minH="100vh" bg={C.bg} fontFamily="'Inter', system-ui, sans-serif" color={C.text}>
@@ -302,38 +401,42 @@ export default function App() {
         position="sticky" top={0} h="100vh">
 
         {/* Brand */}
-        <Flex align="center" gap={3} px={5} py={5} borderBottom={`1px solid ${C.sidebarLine}`}>
-          <Flex w="32px" h="32px" borderRadius="9px"
-            bg="linear-gradient(135deg,#2563eb,#6366f1)"
-            align="center" justify="center" flexShrink={0}>
-            <Icon as={ParkingCircle} boxSize={3.5} color="white" />
+        <Flex align="center" justify="space-between" px={5} py={5} borderBottom={`1px solid ${C.sidebarLine}`}>
+          <Flex align="center" gap={3}>
+            <Flex w="32px" h="32px" borderRadius="9px"
+              bg="linear-gradient(135deg,#2563eb,#6366f1)"
+              align="center" justify="center" flexShrink={0}>
+              <Icon as={ParkingCircle} boxSize={3.5} color="white" />
+            </Flex>
+            <Box>
+              <Text fontSize="14px" fontWeight="700" color="white" lineHeight={1}>ParkOps</Text>
+              <Text fontSize="10px" color={C.sidebarMuted} letterSpacing="0.07em" mt={0.5}>LOT CONTROL</Text>
+            </Box>
           </Flex>
-          <Box>
-            <Text fontSize="14px" fontWeight="700" color="white" lineHeight={1}>ParkOps</Text>
-            <Text fontSize="10px" color={C.sidebarMuted} letterSpacing="0.07em" mt={0.5}>LOT CONTROL</Text>
-          </Box>
+
+          <Icon as={LogOut} boxSize={4} color={C.sidebarMuted} cursor="pointer" onClick={handleLogout} _hover={{ color: "white" }} />
         </Flex>
 
         {/* Nav */}
         <Box flex={1} px={3} pt={5}>
           <Text fontSize="9px" fontWeight="700" color={C.sidebarMuted}
-            letterSpacing="0.16em" px={3} mb={2}>WORKSPACES</Text>
+            letterSpacing="0.16em" px={3} mb={2}>WORKSPACE ACTIONS</Text>
           <VStack spacing={0.5}>
-            {NAV.map(item => {
-              const on = tab === item.key;
+            {availableSubTabs.map(item => {
+              const on = subTab === item.key;
               return (
                 <Flex key={item.key} as="button" w="full" align="center" gap={2.5}
                   px={3} py={2.5} borderRadius="8px"
                   bg={on ? C.sidebarSub : "transparent"}
-                  onClick={() => setTab(item.key)}
+                  onClick={() => setSubTab(item.key)}
                   transition="background 0.12s" _hover={{ bg: C.sidebarSub }}
                   position="relative">
                   {on && <Box position="absolute" left={0} top="50%" transform="translateY(-50%)"
-                    w="2.5px" h="16px" bg={item.color} borderRadius="0 3px 3px 0" />}
+                    w="2.5px" h="16px" bg={nav.color} borderRadius="0 3px 3px 0" />}
                   <Flex w="26px" h="26px" borderRadius="7px"
-                    bg={on ? item.color + "28" : "#ffffff0e"}
+                    bg={on ? nav.color + "28" : "#ffffff0e"}
                     align="center" justify="center" flexShrink={0}>
-                    <Icon as={item.icon} boxSize={3.5} color={on ? item.color : C.sidebarMuted} />
+                    <Icon as={item.icon} boxSize={3.5} color={on ? nav.color : C.sidebarMuted} />
                   </Flex>
                   <Text fontSize="13px" fontWeight={on ? "600" : "400"}
                     color={on ? "white" : C.sidebarText}>{item.label}</Text>
@@ -380,20 +483,20 @@ export default function App() {
             </HStack>
             <Text fontSize={{ base: "17px", md: "20px" }} fontWeight="700" color={C.text} lineHeight={1.2}>
               {tab === "user" ? "Service Advisor Desk"
-               : tab === "valet" ? "Valet Lane Control"
-               : tab === "admin" ? "Parking Lot Dashboard"
-               : "Vehicle Tracker"}
+                : tab === "valet" ? "Valet Lane Control"
+                  : tab === "admin" ? "Parking Lot Dashboard"
+                    : "Vehicle Tracker"}
             </Text>
           </Box>
           {/* Mobile nav */}
           <HStack spacing={1} display={{ base: "flex", lg: "none" }}>
-            {NAV.map(item => (
+            {availableSubTabs.map(item => (
               <Flex key={item.key} as="button" w="32px" h="32px" borderRadius="8px"
                 align="center" justify="center"
-                bg={tab === item.key ? item.color + "15" : C.faint}
-                border={`1px solid ${tab === item.key ? item.color + "50" : C.border}`}
-                onClick={() => setTab(item.key)}>
-                <Icon as={item.icon} boxSize={3.5} color={tab === item.key ? item.color : C.muted} />
+                bg={subTab === item.key ? nav.color + "15" : C.faint}
+                border={`1px solid ${subTab === item.key ? nav.color + "50" : C.border}`}
+                onClick={() => setSubTab(item.key)}>
+                <Icon as={item.icon} boxSize={3.5} color={subTab === item.key ? nav.color : C.muted} />
               </Flex>
             ))}
           </HStack>
@@ -401,15 +504,15 @@ export default function App() {
 
         <Box px={{ base: 5, md: 8 }} py={5}>
           <Stack spacing={4}>
- 
+
             {/* ── Metric cards (moved to top for compactness) ── */}
             <SimpleGrid columns={{ base: 2, sm: 3, md: 5 }} spacing={3}>
               {[
-                { icon: Car,           label: "Active",     value: m.active,  color: C.blue,   soft: C.blueSoft   },
-                { icon: Timer,         label: "Waiting",    value: m.waiting, color: C.amber,  soft: C.amberSoft  },
-                { icon: Zap,           label: "Ready",      value: m.ready,   color: C.green,  soft: C.greenSoft  },
-                { icon: TrendingUp,    label: "Completed",  value: m.done,    color: C.indigo, soft: C.indigoSoft },
-                { icon: ParkingCircle, label: "Free Slots", value: m.free,    color: C.teal,   soft: C.tealSoft, suffix: `/${TOTAL}` },
+                { icon: Car, label: "Active", value: m.active, color: C.blue, soft: C.blueSoft },
+                { icon: Timer, label: "Waiting", value: m.waiting, color: C.amber, soft: C.amberSoft },
+                { icon: Zap, label: "Ready", value: m.ready, color: C.green, soft: C.greenSoft },
+                { icon: TrendingUp, label: "Completed", value: m.done, color: C.indigo, soft: C.indigoSoft },
+                { icon: ParkingCircle, label: "Free Slots", value: m.free, color: C.teal, soft: C.tealSoft, suffix: `/${TOTAL}` },
               ].map(c => (
                 <Box key={c.label} bg={C.surface} border={`1px solid ${C.border}`}
                   borderTop={`3px solid ${c.color}`} borderRadius="12px" p={3}
@@ -429,182 +532,260 @@ export default function App() {
                 </Box>
               ))}
             </SimpleGrid>
- 
+
             {/* ── Unified Split Dashboard Layout ── */}
             <Grid templateColumns={{ base: "1fr", xl: "1.15fr 0.85fr" }} gap={5} alignItems="start">
-              
+
               {/* Left Pane: Controls, Active Lot & API Logs */}
               <GridItem>
                 <Stack spacing={4}>
-                  
+
                   {/* Tabbed Action Panels */}
                   <Card>
                     {/* Tab header */}
                     <Flex align="center" gap={3} pb={4} mb={4} borderBottom={`1px solid ${C.border}`}>
                       <Flex w="36px" h="36px" borderRadius="9px"
-                        bg={tab==="user"?C.blueSoft:tab==="valet"?C.tealSoft:tab==="admin"?C.amberSoft:C.indigoSoft}
+                        bg={tab === "user" ? C.blueSoft : tab === "valet" ? C.tealSoft : tab === "admin" ? C.amberSoft : C.indigoSoft}
                         align="center" justify="center" flexShrink={0}>
                         <Icon as={nav.icon} boxSize={4} color={nav.color} />
                       </Flex>
                       <Box>
                         <Text fontSize="14px" fontWeight="700" color={C.text}>{nav.label}</Text>
                         <Text fontSize="11px" color={C.muted}>
-                          {tab==="user"?"Check vehicles in and out"
-                           :tab==="valet"?"Manage vehicle handoffs"
-                           :tab==="admin"?"Monitor all lot activity"
-                           :"Track any vehicle's journey"}
+                          {tab === "user" ? "Check vehicles in and out"
+                            : tab === "valet" ? "Manage vehicle handoffs"
+                              : tab === "admin" ? "Monitor all lot activity"
+                                : "Track any vehicle's journey"}
                         </Text>
                       </Box>
                     </Flex>
- 
-                    {/* USER */}
-                    {tab === "user" && (
-                      <Stack spacing={5} divider={<Divider borderColor={C.border} />}>
-                        <Section label="Request Check-In">
-                          <SimpleGrid columns={{ base: 1, md: 3 }} spacing={3} mt={2}>
-                            <Field label="Vehicle No." value={form.vehicleNumber} onChange={e=>setForm({...form,vehicleNumber:e.target.value})} placeholder="TN01AB1234" required />
-                            <Field label="Customer Name" value={form.customerName} onChange={e=>setForm({...form,customerName:e.target.value})} placeholder="John Doe" required />
-                            <Field label="Mobile" value={form.mobileNumber} onChange={e=>setForm({...form,mobileNumber:e.target.value})} placeholder="9876543210" />
-                          </SimpleGrid>
-                          <AppBtn mt={3} color={C.blue} soft={C.blueSoft} icon={CarFront} loading={busy==="user:create"} onClick={()=>run("create","user")}>
-                            Request Check-In
-                          </AppBtn>
 
-                          {lastCheckedInVisit && (
-                            <Box bg={C.greenSoft} border={`1px solid ${C.green}30`} borderRadius="10px" p={3.5} mt={4.5}>
-                              <Flex align="center" gap={3}>
-                                <Icon as={CheckCircle2} boxSize={5} color={C.green} />
-                                <Box>
-                                  <Text fontSize="13px" fontWeight="700" color={C.text}>
-                                    Vehicle Registered Successfully
-                                  </Text>
-                                  <Text fontSize="12px" color={C.sub} mt={0.5}>
-                                    Vehicle <strong>{lastCheckedInVisit.vehicleNumber}</strong> has been assigned Visit ID: <strong style={{ color: C.green }}>{lastCheckedInVisit.id}</strong>.
-                                  </Text>
-                                </Box>
-                                <Button size="xs" ml="auto" colorScheme="green" variant="ghost" onClick={() => setLastCheckedInVisit(null)}>
-                                  Dismiss
-                                </Button>
-                              </Flex>
-                            </Box>
-                          )}
-                        </Section>
- 
-                        <Section label="Request Check-Out">
-                          <Box maxW="200px" mt={2}>
-                            <Field label="Visit ID" value={visitId} onChange={e=>setVisitId(e.target.value)} placeholder="101" type="number" />
-                          </Box>
-                          <AppBtn mt={3} color={C.blue} soft={C.blueSoft} icon={BellRing} outline loading={busy==="user:request"} onClick={()=>run("request","user")}>
-                            Request Check-Out
-                          </AppBtn>
-                        </Section>
- 
-                        <Section label="Add-On Services">
-                          <SimpleGrid columns={{ base: 1, md: 2 }} spacing={3} mt={2} maxW="440px">
-                            <Field label="Visit ID" value={visitId} onChange={e=>setVisitId(e.target.value)} placeholder="101" type="number" />
-                            <FormControl>
-                              <FormLabel fontSize="11px" fontWeight="600" color={C.muted} letterSpacing="0.06em" mb={1.5}>Service</FormLabel>
-                              <Input list="uo" value={addon} onChange={e=>setAddon(e.target.value)}
-                                bg={C.surface} border={`1px solid ${C.border}`} borderRadius="9px"
-                                color={C.text} fontSize="13px"
-                                _focus={{ borderColor: C.borderFocus, boxShadow: "none" }} />
-                              <datalist id="uo">{ADD_ONS.map(o=><option key={o} value={o}/>)}</datalist>
-                            </FormControl>
-                          </SimpleGrid>
-                          <AppBtn mt={3} color={C.indigo} soft={C.indigoSoft} icon={Wrench} outline loading={busy==="user:addon"} onClick={()=>run("addon","user")}>
-                            Request Add-On
-                          </AppBtn>
-                        </Section>
-                      </Stack>
-                    )}
- 
-                    {/* VALET */}
-                    {tab === "valet" && (
-                      <Stack spacing={5} divider={<Divider borderColor={C.border} />}>
-                        <Section label="Visit Actions">
-                          <Box maxW="200px" mt={2} mb={3}>
-                            <Field label="Visit ID" value={visitId} onChange={e=>setVisitId(e.target.value)} placeholder="101" type="number" />
-                          </Box>
-                          <Stack spacing={2}>
-                            <ActionRow color={C.teal}   soft={C.tealSoft}   icon={BadgeCheck}   title="Approve Request"  sub="Approve check-in and update status"   loading={busy==="valet:acknowledge"} onClick={()=>run("acknowledge","valet")} />
-                            <ActionRow color={C.green}  soft={C.greenSoft}  icon={CheckCircle2} title="Mark Ready"       sub="Vehicle serviced, awaiting pickup"     loading={busy==="valet:ready"}       onClick={()=>run("ready","valet")} />
-                            <ActionRow color={C.indigo} soft={C.indigoSoft} icon={CarFront}     title="Accept Checkout"  sub="Confirm handoff to customer"           loading={busy==="valet:checkout"}    onClick={()=>run("checkout","valet")} />
-                          </Stack>
-                        </Section>
- 
-                        <Section label="Add-On Work">
-                          <SimpleGrid columns={{ base: 1, md: 2 }} spacing={3} mt={2} mb={3} maxW="440px">
-                            <Field label="Visit ID" value={visitId} onChange={e=>setVisitId(e.target.value)} placeholder="101" type="number" />
-                            <FormControl>
-                              <FormLabel fontSize="11px" fontWeight="600" color={C.muted} letterSpacing="0.06em" mb={1.5}>Service</FormLabel>
-                              <Input list="vo" value={addon} onChange={e=>setAddon(e.target.value)}
-                                bg={C.surface} border={`1px solid ${C.border}`} borderRadius="9px"
-                                color={C.text} fontSize="13px"
-                                _focus={{ borderColor: C.borderFocus, boxShadow: "none" }} />
-                              <datalist id="vo">{ADD_ONS.map(o=><option key={o} value={o}/>)}</datalist>
-                            </FormControl>
-                          </SimpleGrid>
-                          <Stack spacing={2}>
-                            <ActionRow color={C.amber} soft={C.amberSoft} icon={Wrench}       title="Start Add-On"   sub="Begin the selected extra service"         loading={busy==="valet:startAddOn"}    onClick={()=>run("startAddOn","valet")} />
-                            <ActionRow color={C.green} soft={C.greenSoft} icon={CheckCircle2} title="Stop Add-On"    sub="Finish and complete the extra service"   loading={busy==="valet:completeAddOn"} onClick={()=>run("completeAddOn","valet")} />
-                          </Stack>
-                          {addOns.length > 0 && (
-                            <Stack spacing={2} mt={3}>
-                              {addOns.map(a => (
-                                <Flex key={a.id} align="center" justify="space-between" gap={3}
-                                  px={3} py={2} border={`1px solid ${C.border}`} borderRadius="9px" bg={C.faint}>
+                    {/* ── USER TAB SECTIONS ── */}
+                    {/* Contains check-in, check-out, and add-on services tailored for Service Advisors */}
+                    {tab === "user" && (
+                      <Stack spacing={5}>
+                        {subTab === "check_in" && (
+                          <Section label="Request Check-In">
+                            <SimpleGrid columns={{ base: 1, md: 2 }} spacing={3} mt={2}>
+                              <Field label="Vehicle No." value={form.vehicleNumber} onChange={e => setForm({ ...form, vehicleNumber: e.target.value.replace(/\s+/g, '').toUpperCase() })} placeholder="TN01AB1234" required />
+                              <Field label="Customer Name" value={form.customerName} onChange={e => setForm({ ...form, customerName: e.target.value })} placeholder="John Doe" required />
+                              <Field label="Mobile" value={form.mobileNumber} onChange={e => setForm({ ...form, mobileNumber: e.target.value })} placeholder="9876543210" />
+                              <Field label="Email" value={form.email} onChange={e => setForm({ ...form, email: e.target.value })} placeholder="abc@example.com" />
+                            </SimpleGrid>
+                            <AppBtn mt={3} color={C.blue} soft={C.blueSoft} icon={CarFront} loading={busy === "user:create"} onClick={() => run("create", "user")}>
+                              Request Check-In
+                            </AppBtn>
+
+                            {lastCheckedInVisit && (
+                              <Box bg={C.greenSoft} border={`1px solid ${C.green}30`} borderRadius="10px" p={3.5} mt={4.5}>
+                                <Flex align="center" gap={3}>
+                                  <Icon as={CheckCircle2} boxSize={5} color={C.green} />
                                   <Box>
-                                    <Text fontSize="12px" fontWeight="600" color={C.text}>{a.serviceName}</Text>
-                                    <Text fontSize="10px" color={C.muted}>Visit #{a.visitId} · {a.createdAt ?? "n/a"}</Text>
+                                    <Text fontSize="13px" fontWeight="700" color={C.text}>
+                                      Vehicle Registered Successfully
+                                    </Text>
+                                    <Text fontSize="12px" color={C.sub} mt={0.5}>
+                                      Vehicle <strong>{lastCheckedInVisit.vehicleNumber}</strong> has been assigned Visit ID: <strong style={{ color: C.green }}>{lastCheckedInVisit.id}</strong>.
+                                    </Text>
                                   </Box>
-                                  <StatusPill status={a.status} />
+                                  <Button size="xs" ml="auto" colorScheme="green" variant="ghost" onClick={() => setLastCheckedInVisit(null)}>
+                                    Dismiss
+                                  </Button>
                                 </Flex>
-                              ))}
-                            </Stack>
-                          )}
-                        </Section>
+                              </Box>
+                            )}
+                          </Section>
+                        )}
+
+                        {subTab === "check_out" && (
+                          <Section label="Request Check-Out">
+                            <Box maxW="240px" mt={2}>
+                              <Field label="Visit ID or Vehicle No." value={visitInput} onChange={e => setVisitInput(e.target.value.toUpperCase())} placeholder="101 or TN01AB1234" />
+                            </Box>
+                            <AppBtn mt={3} color={C.blue} soft={C.blueSoft} icon={BellRing} outline loading={busy === "user:request"} onClick={() => run("request", "user")}>
+                              Request Check-Out
+                            </AppBtn>
+                          </Section>
+                        )}
+
+                        {subTab === "add_on" && (
+                          <Section label="Add-On Services">
+                            <SimpleGrid columns={{ base: 1, md: 2 }} spacing={3} mt={2} maxW="480px">
+                              <Field label="Visit ID or Vehicle No." value={visitInput} onChange={e => setVisitInput(e.target.value.toUpperCase())} placeholder="101 or TN01AB1234" />
+                              <FormControl>
+                                <FormLabel fontSize="11px" fontWeight="600" color={C.muted} letterSpacing="0.06em" mb={1.5}>Service</FormLabel>
+                                <Select value={addon} onChange={e => setAddon(e.target.value)}
+                                  bg={C.surface} border={`1px solid ${C.border}`} borderRadius="9px"
+                                  color={C.text} fontSize="13px"
+                                  _focus={{ borderColor: C.borderFocus, boxShadow: "none" }}>
+                                  {ADD_ONS.map(o => <option key={o} value={o}>{o}</option>)}
+                                </Select>
+                              </FormControl>
+                            </SimpleGrid>
+                            <AppBtn mt={3} color={C.indigo} soft={C.indigoSoft} icon={Wrench} outline loading={busy === "user:addon"} onClick={() => run("addon", "user")}>
+                              Request Add-On
+                            </AppBtn>
+                          </Section>
+                        )}
                       </Stack>
                     )}
- 
-                    {/* ADMIN */}
+
+                    {/* ── VALET TAB SECTIONS ── */}
+                    {/* Contains visit actions and add-on work execution tailored for Valets */}
+                    {tab === "valet" && (
+                      <Stack spacing={5}>
+                        {subTab === "visit_actions" && (
+                          <Section label="Visit Actions">
+                            <Box maxW="240px" mt={2} mb={3}>
+                              <Field label="Visit ID or Vehicle No." value={visitInput} onChange={e => setVisitInput(e.target.value.toUpperCase())} placeholder="101 or TN01AB1234" />
+                            </Box>
+                            <Stack spacing={2}>
+                              <ActionRow color={C.teal} soft={C.tealSoft} icon={BadgeCheck} title="Approve Request" sub="Approve check-in and update status" loading={busy === "valet:acknowledge"} onClick={() => run("acknowledge", "valet")} />
+                              <ActionRow color={C.green} soft={C.greenSoft} icon={CheckCircle2} title="Mark Ready" sub="Vehicle serviced, awaiting pickup" loading={busy === "valet:ready"} onClick={() => run("ready", "valet")} />
+                              <ActionRow color={C.indigo} soft={C.indigoSoft} icon={CarFront} title="Accept Checkout" sub="Confirm handoff to customer" loading={busy === "valet:checkout"} onClick={() => run("checkout", "valet")} />
+                            </Stack>
+                          </Section>
+                        )}
+
+                        {subTab === "add_on_work" && (
+                          <Section label="Add-On Work">
+                            <SimpleGrid columns={{ base: 1, md: 2 }} spacing={3} mt={2} mb={3} maxW="480px">
+                              <Field label="Visit ID or Vehicle No." value={visitInput} onChange={e => setVisitInput(e.target.value.toUpperCase())} placeholder="101 or TN01AB1234" />
+                              <FormControl>
+                                <FormLabel fontSize="11px" fontWeight="600" color={C.muted} letterSpacing="0.06em" mb={1.5}>Service</FormLabel>
+                                <Select value={addon} onChange={e => setAddon(e.target.value)}
+                                  bg={C.surface} border={`1px solid ${C.border}`} borderRadius="9px"
+                                  color={C.text} fontSize="13px"
+                                  _focus={{ borderColor: C.borderFocus, boxShadow: "none" }}>
+                                  {ADD_ONS.map(o => <option key={o} value={o}>{o}</option>)}
+                                </Select>
+                              </FormControl>
+                            </SimpleGrid>
+                            <Stack spacing={2}>
+                              <ActionRow color={C.amber} soft={C.amberSoft} icon={Wrench} title="Start Add-On" sub="Begin the selected extra service" loading={busy === "valet:startAddOn"} onClick={() => run("startAddOn", "valet")} />
+                              <ActionRow color={C.green} soft={C.greenSoft} icon={CheckCircle2} title="Stop Add-On" sub="Finish and complete the extra service" loading={busy === "valet:completeAddOn"} onClick={() => run("completeAddOn", "valet")} />
+                            </Stack>
+                            {addOns.length > 0 && (
+                              <Stack spacing={2} mt={3}>
+                                {addOns.map(a => (
+                                  <Flex key={a.id} align="center" justify="space-between" gap={3}
+                                    px={3} py={2} border={`1px solid ${C.border}`} borderRadius="9px" bg={C.faint}>
+                                    <Box>
+                                      <Text fontSize="12px" fontWeight="600" color={C.text}>{a.serviceName}</Text>
+                                      <Text fontSize="10px" color={C.muted}>Visit #{a.visitId} · {a.createdAt ?? "n/a"}</Text>
+                                    </Box>
+                                    <StatusPill status={a.status} />
+                                  </Flex>
+                                ))}
+                              </Stack>
+                            )}
+                          </Section>
+                        )}
+                      </Stack>
+                    )}
+
+                    {/* ── ADMIN TAB SECTIONS ── */}
+                    {/* Contains live vehicle data monitoring tailored for Admins */}
                     {tab === "admin" && (
                       <Stack spacing={4}>
-                        <Flex justify="space-between" align="center">
-                          <SLabel>Live Vehicle Data</SLabel>
-                          <AppBtn color={C.amber} soft={C.amberSoft} icon={RefreshCw} size="sm"
-                            loading={busy==="admin:load"} onClick={()=>run("load","admin")}>
-                            Refresh
-                          </AppBtn>
-                        </Flex>
-                        <SimpleGrid columns={{ base: 1, md: 2 }} spacing={4}>
-                          <VehicleTable title="In Lot"      icon={Car}        iconColor={C.blue}   visits={active} />
-                          <VehicleTable title="All History" icon={TrendingUp} iconColor={C.indigo} visits={visits} />
-                        </SimpleGrid>
+                        {subTab === "live_data" && (
+                          <>
+                            <Flex justify="space-between" align="center">
+                              <SLabel>Live Vehicle Data</SLabel>
+                              <AppBtn color={C.amber} soft={C.amberSoft} icon={RefreshCw} size="sm"
+                                loading={busy === "admin:load"} onClick={() => run("load", "admin")}>
+                                Refresh
+                              </AppBtn>
+                            </Flex>
+                            <SimpleGrid columns={{ base: 1, md: 2 }} spacing={4}>
+                              <VehicleTable title="In Lot" icon={Car} iconColor={C.blue} visits={active} />
+                              <VehicleTable title="All History" icon={TrendingUp} iconColor={C.indigo} visits={visits} />
+                            </SimpleGrid>
+                          </>
+                        )}
+                        {subTab === "pending_users" && (
+                          <Section label="Pending Signups">
+                            <Flex justify="space-between" align="center" mt={2} mb={4}>
+                              <Text fontSize="13px" color={C.sub}>Users waiting for role assignment</Text>
+                              <AppBtn color={C.blue} soft={C.blueSoft} icon={RefreshCw} size="sm" loading={busy === "admin:loadPendingUsers"} onClick={() => run("loadPendingUsers", "admin")}>Refresh</AppBtn>
+                            </Flex>
+
+                            {pendingUsers.length === 0 ? (
+                              <Flex direction="column" align="center" gap={2} py={8} borderRadius="10px" bg={C.faint} border={`1.5px dashed ${C.border}`}>
+                                <Icon as={UserRoundCheck} boxSize={6} color={C.muted} />
+                                <Text fontSize="12px" color={C.muted}>No pending signups found.</Text>
+                              </Flex>
+                            ) : (
+                              <Stack spacing={3}>
+                                {pendingUsers.map(user => (
+                                  <Flex key={user.id} align="center" justify="space-between" p={3} bg={C.faint} border={`1px solid ${C.border}`} borderRadius="10px">
+                                    <Box>
+                                      <Text fontSize="13px" fontWeight="700" color={C.text}>{user.username}</Text>
+                                      <Text fontSize="11px" color={C.muted}>Email: {user.email} | ID: {user.id}</Text>
+                                    </Box>
+                                    <Flex align="center" gap={3}>
+                                      <Select
+                                        id={`role-${user.id}`}
+                                        defaultValue="Service Advisor"
+                                        size="sm" bg={C.surface}
+                                        w="150px" borderRadius="8px"
+                                      >
+                                        <option value="Service Advisor">Service Advisor</option>
+                                        <option value="Valet">Valet</option>
+                                        <option value="Admin">Admin</option>
+                                      </Select>
+                                      <Button
+                                        size="sm"
+                                        colorScheme="blue"
+                                        onClick={async () => {
+                                          const role = document.getElementById(`role-${user.id}`).value;
+                                          setBusy("admin:assignRole");
+                                          try {
+                                            await parkingApi.assignRole(user.id, role);
+                                            toast({ title: "Role Assigned", status: "success", duration: 2000, position: "bottom-right" });
+                                            run("loadPendingUsers", "admin");
+                                          } catch (e) {
+                                            toast({ title: "Failed", description: e.message, status: "error", duration: 3000, position: "bottom-right" });
+                                          } finally {
+                                            setBusy("");
+                                          }
+                                        }}
+                                      >
+                                        Approve
+                                      </Button>
+                                    </Flex>
+                                  </Flex>
+                                ))}
+                              </Stack>
+                            )}
+                          </Section>
+                        )}
                       </Stack>
                     )}
- 
-                    {/* TIMELINE */}
-                    {tab === "timeline" && (
+
+                    {/* ── VEHICLE TRACKER SECTION ── */}
+                    {/* Contains the timeline and history lookup for a specific Visit ID */}
+                    {subTab === "tracker" && (
                       <Stack spacing={4}>
                         <Section label="Look Up Visit">
-                          <HStack mt={2} spacing={3} align="flex-end" maxW="340px">
+                          <HStack mt={2} spacing={3} align="flex-end" maxW="380px">
                             <Box flex={1}>
-                              <Field label="Visit ID" value={tlId} onChange={e=>setTlId(e.target.value)} placeholder="101" type="number" />
+                              <Field label="Visit ID or Vehicle No." value={tlInput} onChange={e => setTlInput(e.target.value.toUpperCase())} placeholder="101 or TN01AB1234" />
                             </Box>
                             <AppBtn color={C.indigo} soft={C.indigoSoft} icon={CircleDot} loading={tlLoading} onClick={trackTimeline}>
                               Track
                             </AppBtn>
                           </HStack>
                         </Section>
- 
+
                         {!tlVisit && !tlLoading && (
                           <Flex direction="column" align="center" gap={2} py={8}
                             borderRadius="10px" bg={C.faint} border={`1.5px dashed ${C.border}`}>
                             <Icon as={Clock} boxSize={6} color={C.muted} />
-                            <Text fontSize="12px" color={C.muted}>Enter a Visit ID to see its journey</Text>
+                            <Text fontSize="12px" color={C.muted}>Enter a Visit ID or Vehicle No. to see its journey</Text>
                           </Flex>
                         )}
- 
+
                         {tlVisit && (
                           <Stack spacing={4}>
                             {/* Vehicle header */}
@@ -620,16 +801,16 @@ export default function App() {
                               </Box>
                               <StatusPill status={tlVisit.status} />
                             </Flex>
- 
+
                             {/* Step flow */}
                             <Box overflowX="auto" py={1}>
                               <HStack spacing={0} minW="540px">
                                 {STEPS.map((step, i) => {
                                   const order = STEPS.map(s => s.key);
-                                  const cur   = order.indexOf(tlVisit.status);
-                                  const done  = i <= cur;
-                                  const now   = step.key === tlVisit.status;
-                                  const cfg   = STATUS[step.key] ?? STATUS["CheckedOut"];
+                                  const cur = order.indexOf(tlVisit.status);
+                                  const done = i <= cur;
+                                  const now = step.key === tlVisit.status;
+                                  const cfg = STATUS[step.key] ?? STATUS["CheckedOut"];
                                   return (
                                     <Box key={step.key} flex={1} display="flex" flexDirection="column"
                                       alignItems="center" position="relative">
@@ -660,13 +841,13 @@ export default function App() {
                                 })}
                               </HStack>
                             </Box>
- 
+
                             {/* Detail chips */}
                             <SimpleGrid columns={3} spacing={3}>
                               {[
-                                { k: "Customer",   v: tlVisit.customerName ?? "—" },
-                                { k: "Mobile",     v: tlVisit.mobileNumber  ?? "—" },
-                                { k: "Checked In", v: tlVisit.createdAt     ?? "—" },
+                                { k: "Customer", v: tlVisit.customerName ?? "—" },
+                                { k: "Mobile", v: tlVisit.mobileNumber ?? "—" },
+                                { k: "Checked In", v: tlVisit.createdAt ?? "—" },
                               ].map(d => (
                                 <Box key={d.k} bg={C.faint} border={`1px solid ${C.border}`}
                                   borderRadius="9px" p={3}>
@@ -681,9 +862,9 @@ export default function App() {
                       </Stack>
                     )}
                   </Card>
- 
-                  {/* Active Lot (Show here when not on admin tab) */}
-                  {tab !== "admin" && (
+
+                  {/* Active Lot (Show here when on valet tab) */}
+                  {tab === "valet" && (
                     <Card>
                       <Flex justify="space-between" align="center" mb={4}>
                         <Box>
@@ -710,36 +891,36 @@ export default function App() {
                               <Text fontSize="12px" color={C.muted}>No active vehicles in lot</Text>
                             </Flex>
                           ) : active.map(v => {
-                              const vZone = ZONES.find(z => z.statuses.includes(v.status)) ?? ZONES[0];
-                              return (
-                                <Flex key={v.id} align="center" gap={3} px={3} py={2}
-                                  border={`1px solid ${C.border}`} borderRadius="10px"
-                                  _hover={{ bg: C.faint, transform: "translateX(2px)" }}
-                                  transition="all 0.15s">
-                                  <Flex w="30px" h="30px" borderRadius="7px"
-                                    bg={vZone.color + "18"}
-                                    align="center" justify="center" flexShrink={0}>
-                                    <Icon as={CarFront} boxSize={3.5} color={vZone.color} />
-                                  </Flex>
-                                  <Box flex={1} minW={0}>
-                                    <Text fontSize="13px" fontWeight="700" color={C.text}>{v.vehicleNumber}</Text>
-                                    <Text fontSize="11px" color={C.muted} isTruncated>
-                                      {v.customerName} · <Text as="span" color={vZone.color} fontWeight="600">{vZone.key}</Text>
-                                    </Text>
-                                  </Box>
-                                  <StatusPill status={v.status} />
+                            const vZone = ZONES.find(z => z.statuses.includes(v.status)) ?? ZONES[0];
+                            return (
+                              <Flex key={v.id} align="center" gap={3} px={3} py={2}
+                                border={`1px solid ${C.border}`} borderRadius="10px"
+                                _hover={{ bg: C.faint, transform: "translateX(2px)" }}
+                                transition="all 0.15s">
+                                <Flex w="30px" h="30px" borderRadius="7px"
+                                  bg={vZone.color + "18"}
+                                  align="center" justify="center" flexShrink={0}>
+                                  <Icon as={CarFront} boxSize={3.5} color={vZone.color} />
                                 </Flex>
-                              );
-                            })}
+                                <Box flex={1} minW={0}>
+                                  <Text fontSize="13px" fontWeight="700" color={C.text}>{v.vehicleNumber}</Text>
+                                  <Text fontSize="11px" color={C.muted} isTruncated>
+                                    {v.customerName} · <Text as="span" color={vZone.color} fontWeight="600">{vZone.key}</Text>
+                                  </Text>
+                                </Box>
+                                <StatusPill status={v.status} />
+                              </Flex>
+                            );
+                          })}
                         </VStack>
                       </Box>
                     </Card>
                   )}
- 
+
                   {/* API response logs removed for a cleaner, user-focused UI */}
                 </Stack>
               </GridItem>
- 
+
               {/* Right Pane: Live Lot Map & Status Legend (Always Visible) */}
               <GridItem position={{ xl: "sticky" }} top="76px">
                 <Card>
@@ -759,7 +940,7 @@ export default function App() {
                       ))}
                     </HStack>
                   </Flex>
- 
+
                   <Stack spacing={4}>
                     {ZONES.map(zone => {
                       const zs = slots.filter(s => s.zone === zone.key);
@@ -777,7 +958,7 @@ export default function App() {
                               {occupiedCount}/{zs.length}
                             </Text>
                           </Flex>
-                          
+
                           {/* 5 columns is optimal for standard sidebar width */}
                           <SimpleGrid columns={{ base: 5, sm: 5, md: 10, xl: 5, "2xl": 10 }} spacing={1.5}>
                             {zs.map(slot => {
@@ -794,12 +975,12 @@ export default function App() {
                                   _hover={{ bg: occupied ? zone.color + "14" : "#f1f3f7", transform: "translateY(-1px)", boxShadow: "0 2px 5px rgba(0,0,0,0.05)" }}
                                   cursor="pointer"
                                   title={slot.vehicle ? `${slot.code}: ${slot.vehicle.vehicleNumber} (${slot.vehicle.status})` : `${slot.code}: free`}>
-                                  
+
                                   {/* Smart LED status light */}
                                   <Box position="absolute" top="5px" right="5px" w="4.5px" h="4.5px" borderRadius="full"
                                     bg={occupied ? zone.color : "#cbd5e1"}
                                     boxShadow={occupied ? `0 0 5px ${zone.color}` : "none"} />
- 
+
                                   <Text fontSize="8px" fontWeight="800" fontFamily="mono" color={occupied ? zone.color : C.muted} lineHeight={1}>
                                     {slot.code}
                                   </Text>
@@ -814,7 +995,7 @@ export default function App() {
                       );
                     })}
                   </Stack>
- 
+
                   {/* Integrated Status Legend */}
                   <Box pt={3} mt={4} borderTop={`1px solid ${C.border}`}>
                     <Text fontSize="9px" fontWeight="700" color={C.muted}
@@ -831,7 +1012,7 @@ export default function App() {
                 </Card>
               </GridItem>
             </Grid>
- 
+
           </Stack>
         </Box>
       </Box>
@@ -941,8 +1122,10 @@ function VehicleTable({ title, icon, iconColor, visits }) {
           fontSize="10px" fontWeight="700" color={iconColor}>{visits.length}</Box>
       </Flex>
       <VStack spacing={0} align="stretch" maxH="300px" overflowY="auto"
-        sx={{ "&::-webkit-scrollbar": { width: "3px" },
-              "&::-webkit-scrollbar-thumb": { background: C.border, borderRadius: "3px" } }}>
+        sx={{
+          "&::-webkit-scrollbar": { width: "3px" },
+          "&::-webkit-scrollbar-thumb": { background: C.border, borderRadius: "3px" }
+        }}>
         {visits.length === 0 ? (
           <Box px={4} py={5}>
             <Text fontSize="12px" color={C.muted}>No vehicles</Text>

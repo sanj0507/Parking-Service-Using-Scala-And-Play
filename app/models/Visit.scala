@@ -7,7 +7,8 @@ case class Visit(
     vehicleNumber: String,
     customerName: String,
     status: String,
-    createdAt: String = ""
+    createdAt: String = "",
+    email: Option[String] = None
 )
 
 object Visit {
@@ -20,6 +21,7 @@ case class VisitWithAddOns(
     customerName: String,
     status: String,
     createdAt: String,
+    email: Option[String],
     addOns: Seq[AddOnRequest]
 )
 
@@ -33,6 +35,7 @@ object VisitWithAddOns {
       customerName = visit.customerName,
       status = visit.status,
       createdAt = visit.createdAt,
+      email = visit.email,
       addOns = addOns
     )
 }
