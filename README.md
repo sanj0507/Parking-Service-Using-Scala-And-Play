@@ -6,10 +6,11 @@ A robust, full-stack application for managing valet parking check-ins, retrieval
 
 ## Key Features
 
-1. **Role-Based Access Control**:
+1. **Authentication & Role-Based Access Control**:
+   - Secure sign-up/login flow with JWT-based authentication.
    - **Service Advisor (User)**: Manages check-ins, requests vehicle retrieval, requests checkout, and logs add-on services.
    - **Valet Attendant**: Acknowledges retrieval requests, processes vehicles, executes/tracks add-on services, and marks vehicles ready.
-   - **Admin**: Supervises all active visits, tracks histories, and runs administrative controls.
+   - **Admin**: Approves new user sign-ups via dashboard, supervises all active visits, tracks histories, and runs administrative controls.
 2. **Visit Status Lifecycle**:
    - `CheckedIn` ➔ `Requested` ➔ `InProgress` (Acknowledged) ➔ `Ready` (Ready for pickup) ➔ `CheckedOut`
 3. **Add-on Services Tracking**:
@@ -26,7 +27,9 @@ A robust, full-stack application for managing valet parking check-ins, retrieval
 - **Scala** & **Play Framework** (MVC REST API)
 - **Slick ORM** for database mapping
 - **MySQL** database
-- **Role-based Authorization Action** via custom request headers
+- **Redis** for high-performance authentication caching
+- **Kafka** & **Mailpit** for asynchronous email notifications upon role approval
+- **JWT (JSON Web Tokens)** for stateless authentication
 
 ### Frontend
 - **React 18**
@@ -63,9 +66,20 @@ A robust, full-stack application for managing valet parking check-ins, retrieval
 
 ## Database Schema
 
-The database relies on a two-table relational structure defined in `app/repository/VisitRepository.scala`:
+The database relies on a relational structure defined via Slick:
 
-### 1. `visits` Table
+### 1. `users` Table
+Manages system users and roles for authentication.
+
+| Column | Type | Attributes | Description |
+|---|---|---|---|
+| `id` | `Long` | Primary Key, Auto-increment | User Identifier |
+| `username` | `String` | Non-null, Unique (255) | User's unique login handle |
+| `email` | `String` | Non-null, Unique (255) | User's email address for notifications |
+| `password_hash` | `String` | Non-null | BCrypt hashed password |
+| `role` | `String` | Non-null | User's role (`Pending`, `Admin`, `Valet`, `Service Advisor`) |
+
+### 2. `visits` Table
 Holds core data for each parking visit.
 
 | Column | Type | Attributes | Description |
@@ -114,7 +128,9 @@ docker-compose up -d --build
 docker-compose down
 ```
 - **Backend API**: available at `http://localhost:9000`
-- **Database**: running on port `3307` (mapped from `3306` inside container)
+- **Frontend Console**: available at `http://localhost:3000`
+- **Database**: MySQL running on port `3307`
+- **Mailpit (Email Server)**: Web interface available at `http://localhost:8025`
 
 ---
 
