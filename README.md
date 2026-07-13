@@ -1,4 +1,4 @@
-Parking Visit & Valet Management System
+## Parking Visit & Valet Management System
 
 A robust, full-stack application for managing valet parking check-ins, retrieval workflows, and add-on services. This project features a high-performance **Scala + Play Framework REST API** backend, and dual frontend options: a built-in server-rendered dashboard and a modern **React + Vite + Chakra UI** console.
 
