@@ -98,6 +98,9 @@ class VisitService @Inject()(
                 "message" -> play.api.libs.json.JsString(s"your vehicle ${visit.vehicleNumber} has been accepted for check-in at $time")
               ).toString()
               kafkaService.sendEmailNotification(payload)
+              visit.phoneNumber.foreach { phone =>
+                kafkaService.sendSmsNotification(phone, s"your vehicle ${visit.vehicleNumber} has been accepted for check-in at $time")
+              }
               cache.remove("visits-with-addons").map(_ => res)
             }
 
@@ -131,6 +134,9 @@ class VisitService @Inject()(
             "message" -> play.api.libs.json.JsString(s"your vehicle ${visit.vehicleNumber} has been succesfully checked-out. Thank u for using our service")
           ).toString()
           kafkaService.sendEmailNotification(payload)
+          visit.phoneNumber.foreach { phone =>
+            kafkaService.sendSmsNotification(phone, s"your vehicle ${visit.vehicleNumber} has been succesfully checked-out. Thank u for using our service")
+          }
         case None =>
       }
       Future.successful(res)
@@ -148,6 +154,9 @@ class VisitService @Inject()(
                 "message" -> play.api.libs.json.JsString(s"your vehicle ${visit.vehicleNumber} has been serviced and is now ready for check-out")
               ).toString()
               kafkaService.sendEmailNotification(payload)
+              visit.phoneNumber.foreach { phone =>
+                kafkaService.sendSmsNotification(phone, s"your vehicle ${visit.vehicleNumber} has been serviced and is now ready for check-out")
+              }
               cache.remove("visits-with-addons").map(_ => res)
             }
 
@@ -242,6 +251,9 @@ class VisitService @Inject()(
                   "message" -> play.api.libs.json.JsString(s"your vehicle ${v.vehicleNumber} has been serviced and is now ready for check-out")
                 ).toString()
                 kafkaService.sendEmailNotification(payload)
+                v.phoneNumber.foreach { phone =>
+                  kafkaService.sendSmsNotification(phone, s"your vehicle ${v.vehicleNumber} has been serviced and is now ready for check-out")
+                }
               case None =>
             }
             cache.remove("visits-with-addons").map(_ => successMessage)

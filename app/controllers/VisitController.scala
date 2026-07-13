@@ -43,7 +43,8 @@ class VisitController @Inject()(
         vehicleNumber = (json \ "vehicleNumber").as[String],
         customerName = (json \ "customerName").as[String],
         status = (json \ "status").as[String],
-        email = (json \ "email").asOpt[String].filter(_.trim.nonEmpty)
+        email = (json \ "email").asOpt[String].filter(_.trim.nonEmpty),
+        phoneNumber = (json \ "phoneNumber").asOpt[String].filter(_.trim.nonEmpty)
       )
 
       visitService.checkIn(visit).map { generatedId =>

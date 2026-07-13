@@ -4,6 +4,7 @@ import org.apache.kafka.clients.producer.{KafkaProducer, ProducerConfig, Produce
 import org.apache.kafka.common.serialization.StringSerializer
 import play.api.Configuration
 import play.api.inject.ApplicationLifecycle
+import play.api.libs.json.Json
 
 import java.util.Properties
 import javax.inject.{Inject, Singleton}
@@ -14,6 +15,7 @@ class KafkaProducerService @Inject()(config: Configuration, lifecycle: Applicati
 
   private val bootstrapServers = config.getOptional[String]("kafka.bootstrap.servers").getOrElse("localhost:9092")
   private val topic = config.getOptional[String]("kafka.topic").getOrElse("email-notifications")
+  private val smsTopic = config.getOptional[String]("kafka.smsTopic").getOrElse("sms-notifications")
 
   private val props = new Properties()
   props.put(ProducerConfig.BOOTSTRAP_SERVERS_CONFIG, bootstrapServers)
@@ -28,6 +30,15 @@ class KafkaProducerService @Inject()(config: Configuration, lifecycle: Applicati
 
   def sendEmailNotification(message: String): Unit = {
     val record = new ProducerRecord[String, String](topic, message)
+    producer.send(record)
+  }
+
+  def sendSmsNotification(phone: String, message: String): Unit = {
+    val jsonPayload = Json.obj(
+      "phone" -> phone,
+      "message" -> message
+    ).toString()
+    val record = new ProducerRecord[String, String](smsTopic, phone, jsonPayload)
     producer.send(record)
   }
 }

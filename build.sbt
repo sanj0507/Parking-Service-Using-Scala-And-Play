@@ -22,6 +22,7 @@ libraryDependencies ++= Seq(
   "org.apache.kafka" % "kafka-clients" % "3.7.0",
   "com.typesafe.play" %% "play-mailer" % "9.0.0",
   "com.typesafe.play" %% "play-mailer-guice" % "9.0.0",
+  "com.twilio.sdk" % "twilio" % "9.14.0",
   "org.scalatestplus.play" %% "scalatestplus-play" % "7.0.2" % Test
 )
 

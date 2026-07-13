@@ -345,7 +345,7 @@ function Dashboard({ tabName }) {
         if (!form.vehicleNumber.trim()) throw new Error("Vehicle number required");
         if (!/^[A-Z0-9]{4,10}$/.test(form.vehicleNumber)) throw new Error("Invalid vehicle number format (e.g. TN01AB1234)");
         if (!form.customerName.trim()) throw new Error("Customer name required");
-        return parkingApi.createVisit(r, { ...form, status: "RequestedCheckIn" });
+        return parkingApi.createVisit(r, { ...form, phoneNumber: form.mobileNumber, status: "RequestedCheckIn" });
       case "acknowledge": return parkingApi.acknowledge(r, actualVisitId);
       case "ready": return parkingApi.markReady(r, actualVisitId);
       case "request": return parkingApi.requestCheckout(r, actualVisitId);

@@ -24,9 +24,10 @@ class VisitRepository @Inject()(
     def status = column[String]("status")
     def createdAt = column[String]("created_at")
     def email = column[Option[String]]("email")
+    def phoneNumber = column[Option[String]]("phone_number")
 
     def * =
-      (id, vehicleNumber, customerName, status, createdAt, email) <> ((Visit.apply _).tupled, Visit.unapply)
+      (id, vehicleNumber, customerName, status, createdAt, email, phoneNumber) <> ((Visit.apply _).tupled, Visit.unapply)
   }
 
   class AddOnRequestsTable(tag: Tag)
