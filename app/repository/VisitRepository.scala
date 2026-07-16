@@ -25,9 +25,14 @@ class VisitRepository @Inject()(
     def createdAt = column[String]("created_at")
     def email = column[Option[String]]("email")
     def phoneNumber = column[Option[String]]("phone_number")
+    def vehicleType = column[String]("vehicle_type")
+    def slotId = column[Option[Long]]("slot_id")
+
+    def checkoutAt = column[Option[String]]("checkout_at")
+    def totalFee = column[Option[Double]]("total_fee")
 
     def * =
-      (id, vehicleNumber, customerName, status, createdAt, email, phoneNumber) <> ((Visit.apply _).tupled, Visit.unapply)
+      (id, vehicleNumber, customerName, status, createdAt, email, phoneNumber, vehicleType, slotId, checkoutAt, totalFee) <> ((Visit.apply _).tupled, Visit.unapply)
   }
 
   class AddOnRequestsTable(tag: Tag)
@@ -52,6 +57,12 @@ class VisitRepository @Inject()(
       addOnRequests.schema.createIfNotExists
     ))
 
+  def count(): Future[Int] =
+    db.run(visits.length.result)
+
+  def countActiveVisits(): Future[Int] =
+    db.run(visits.filter(_.status =!= models.VisitStatus.CheckedOut).length.result)
+
   def insert(visit: Visit): Future[Long] =
     db.run((visits returning visits.map(_.id)) += visit)
 
@@ -67,6 +78,22 @@ class VisitRepository @Inject()(
         .filter(_.id === id)
         .map(_.status)
         .update(status)
+    )
+
+  def updateSlot(id: Long, slotId: Option[Long]): Future[Int] =
+    db.run(
+      visits
+        .filter(_.id === id)
+        .map(_.slotId)
+        .update(slotId)
+    )
+
+  def updateCheckoutDetails(id: Long, checkoutAt: String, totalFee: Double): Future[Int] =
+    db.run(
+      visits
+        .filter(_.id === id)
+        .map(v => (v.checkoutAt, v.totalFee))
+        .update((Some(checkoutAt), Some(totalFee)))
     )
 
   def insertAddOn(addOnRequest: AddOnRequest): Future[Int] =

@@ -1,13 +1,14 @@
 import {
   Box, Button, Divider, Flex, FormControl, FormLabel,
   Grid, GridItem, HStack, Icon, Input, Select, SimpleGrid,
-  Stack, Text, VStack, useToast
+  Stack, Text, VStack, useToast,
+  Modal, ModalOverlay, ModalContent, ModalHeader, ModalFooter, ModalBody, ModalCloseButton
 } from "@chakra-ui/react";
 import {
   BadgeCheck, BellRing, Car, CarFront, CheckCircle2,
   Clock, CircleDot, KeyRound, LogOut, ParkingCircle,
   RefreshCw, ShieldCheck, Timer, TrendingUp,
-  UserRoundCheck, Wrench, Zap, ArrowRight
+  UserRoundCheck, Wrench, Zap, ArrowRight, CreditCard
 } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 import { BrowserRouter, Routes, Route, Navigate, useNavigate } from "react-router-dom";
@@ -42,8 +43,8 @@ const C = {
 
 /* ─── Status map ─────────────────────────────────────────────── */
 const STATUS = {
-  RequestedCheckIn: { label: "Check-In Req", color: C.teal, soft: C.tealSoft },
-  CheckedIn: { label: "Checked In", color: C.blue, soft: C.blueSoft },
+  RequestedCheckIn: { label: "Check-In Req", color: "#60a5fa", soft: "#eff6ff" }, // Light Blue
+  CheckedIn: { label: "Checked In", color: C.blue, soft: C.blueSoft },          // Dark Blue
   Requested: { label: "Requested", color: C.blue, soft: C.blueSoft },
   RequestedCheckout: { label: "Checkout Req", color: C.blue, soft: C.blueSoft },
   Acknowledged: { label: "Acknowledged", color: C.amber, soft: C.amberSoft },
@@ -73,11 +74,11 @@ const ADD_ONS = ["Car Service", "Washing", "Cleaning"];
 
 // Each zone owns a set of statuses — vehicles are routed by their current status
 const ZONES = [
-  { key: "A", label: "Entry Row", range: [1, 10], statuses: ["RequestedCheckIn", "CheckedIn"], color: C.blue },
-  { key: "B", label: "Service Bay", range: [11, 20], statuses: ["Acknowledged", "InProgress"], color: C.amber },
-  { key: "C", label: "Wash Lane", range: [21, 30], statuses: ["AddOn", "AddOnInProgress", "AddOnCompleted"], color: C.indigo },
-  { key: "D", label: "Ready Lane", range: [31, 40], statuses: ["Ready", "Requested", "RequestedCheckout"], color: C.green },
-  { key: "E", label: "Exit Row", range: [41, 50], statuses: ["CheckedOut"], color: C.gray },
+  { key: "A", label: "Entry Row", statuses: ["RequestedCheckIn", "CheckedIn"], color: C.blue },
+  { key: "B", label: "Service Bay", statuses: ["Acknowledged", "InProgress"], color: C.amber },
+  { key: "C", label: "Wash Lane", statuses: ["AddOn", "AddOnInProgress", "AddOnCompleted"], color: C.indigo },
+  { key: "D", label: "Ready Lane", statuses: ["Ready", "Requested", "RequestedCheckout"], color: C.green },
+  { key: "E", label: "Exit Row", statuses: ["CheckedOut"], color: C.gray },
 ];
 
 const NAV = [
@@ -136,35 +137,51 @@ function getVirtualStatus(v) {
 }
 
 function buildSlots(allVisits) {
-  // Bucket vehicles into zones by their status
-  const buckets = {};
-  ZONES.forEach(z => { buckets[z.key] = []; });
+  const NUM_SLOTS = 15;
+  const slots = [];
+  
+  // Create all empty slots first
+  const typeMap = ["Compact", "Sedan", "SUV", "EV"];
+  ZONES.forEach(zone => {
+    for (let i = 1; i <= NUM_SLOTS; i++) {
+      slots.push({
+        id: `${zone.key}${i}`,
+        code: `${zone.key}${String(i).padStart(2, "0")}`,
+        zone: zone.key,
+        vehicle: null,
+        occupied: false,
+        slotNumber: i,
+        vehicleType: typeMap[(i - 1) % 4]
+      });
+    }
+  });
 
   allVisits.forEach(v => {
     const virtualStatus = getVirtualStatus(v);
-    const zone = ZONES.find(z => z.statuses.includes(virtualStatus));
-    const updatedVehicle = { ...v, status: virtualStatus };
-    if (zone) buckets[zone.key].push(updatedVehicle);
-    // Unrecognised statuses go to A as fallback
-    else buckets["A"].push(updatedVehicle);
+    const zone = ZONES.find(z => z.statuses.includes(virtualStatus)) || ZONES[0];
+    
+    // Check if the backend has assigned a global slot ID yet
+    // Map global slotId (1-75) to local zone slotNum (1-15)
+    let slotNum = v.slotId ? ((v.slotId - 1) % NUM_SLOTS) + 1 : null; 
+    
+    if (!slotNum) {
+      // If waiting for check-in, assign to first available slot in the zone that matches the vehicle type
+      const emptySlot = slots.find(s => s.zone === zone.key && !s.occupied && s.vehicleType === v.vehicleType);
+      if (emptySlot) {
+        emptySlot.vehicle = { ...v, status: virtualStatus };
+        emptySlot.occupied = true;
+      }
+    } else {
+      // Vehicle is checked in and has a specific slot number to use across all zones
+      const targetSlot = slots.find(s => s.zone === zone.key && s.slotNumber === slotNum);
+      if (targetSlot) {
+        targetSlot.vehicle = { ...v, status: virtualStatus };
+        targetSlot.occupied = true;
+      }
+    }
   });
 
-  // Build all 50 slot objects
-  return Array.from({ length: TOTAL }, (_, i) => {
-    const n = i + 1;
-    const zone = ZONES.find(z => n >= z.range[0] && n <= z.range[1]);
-    const zKey = zone?.key ?? "A";
-    // Position within the zone (0-based)
-    const posInZone = n - zone.range[0];
-    const vehicle = buckets[zKey][posInZone] ?? null;
-    return {
-      id: n,
-      code: `${zKey}-${String(n).padStart(2, "0")}`,
-      zone: zKey,
-      vehicle,
-      occupied: !!vehicle,
-    };
-  });
+  return slots;
 }
 
 /**
@@ -233,7 +250,7 @@ function Dashboard({ tabName }) {
   const [tlInput, setTlInput] = useState("");
   const [tlVisit, setTlVisit] = useState(null);
   const [tlLoading, setTlLoading] = useState(false);
-  const [form, setForm] = useState({ vehicleNumber: "", customerName: "", mobileNumber: "", email: "" });
+  const [form, setForm] = useState({ vehicleNumber: "", customerName: "", mobileNumber: "", email: "", vehicleType: "Sedan" });
   const [addon, setAddon] = useState(ADD_ONS[0]);
   const [apiResp, setApiResp] = useState(null);
   const [visits, setVisits] = useState([]);
@@ -241,6 +258,9 @@ function Dashboard({ tabName }) {
   const [pendingUsers, setPendingUsers] = useState([]);
   const [busy, setBusy] = useState("");
   const [lastCheckedInVisit, setLastCheckedInVisit] = useState(null);
+  const [billModalOpen, setBillModalOpen] = useState(false);
+  const [billData, setBillData] = useState(null);
+  const [surgeInput, setSurgeInput] = useState("1.0");
   const toast = useToast();
 
   // Load visits automatically on mount
@@ -303,7 +323,7 @@ function Dashboard({ tabName }) {
           title = "Check-In Created";
           desc = `Assigned Visit ID: ${generatedId}`;
           // Clear the form
-          setForm({ vehicleNumber: "", customerName: "", mobileNumber: "", email: "" });
+          setForm({ vehicleNumber: "", customerName: "", mobileNumber: "", email: "", vehicleType: "Sedan" });
         }
       }
 
@@ -383,6 +403,53 @@ function Dashboard({ tabName }) {
       toast({ title: "Not found", description: e.message, status: "error", duration: 3000, position: "bottom-right" });
       setTlVisit(null);
     } finally { setTlLoading(false); }
+  }
+
+  async function handleInitiateCheckout() {
+    if (!actualVisitId) {
+      toast({ title: "Invalid Visit ID", status: "warning", duration: 2000 });
+      return;
+    }
+    setBusy("valet:checkout");
+    try {
+      const bill = await parkingApi.getBill(actualVisitId);
+      setBillData(bill);
+      setBillModalOpen(true);
+    } catch (e) {
+      toast({ title: "Failed to generate bill", description: e.message, status: "error", duration: 3000 });
+    } finally {
+      setBusy("");
+    }
+  }
+
+  async function handlePaymentWebhook() {
+    if (!billData) return;
+    setBusy("payment");
+    try {
+      await parkingApi.mockPaymentWebhook(billData.visitId);
+      toast({ title: "Payment Successful", description: "Vehicle checked out", status: "success", duration: 3000 });
+      setBillModalOpen(false);
+      setBillData(null);
+      await go("load", "admin");
+    } catch (e) {
+      toast({ title: "Payment Failed", description: e.message, status: "error", duration: 3000 });
+    } finally {
+      setBusy("");
+    }
+  }
+
+  async function handleSetSurge() {
+    setBusy("admin:surge");
+    try {
+      const val = parseFloat(surgeInput);
+      if (isNaN(val) || val <= 0) throw new Error("Invalid multiplier");
+      await parkingApi.setSurgeMultiplier(val);
+      toast({ title: "Surge updated", description: `Multiplier set to ${val}`, status: "success", duration: 2000 });
+    } catch (e) {
+      toast({ title: "Failed", description: e.message, status: "error", duration: 3000 });
+    } finally {
+      setBusy("");
+    }
   }
 
   const occupancy = Math.round(m.active / TOTAL * 100);
@@ -569,6 +636,18 @@ function Dashboard({ tabName }) {
                             <SimpleGrid columns={{ base: 1, md: 2 }} spacing={3} mt={2}>
                               <Field label="Vehicle No." value={form.vehicleNumber} onChange={e => setForm({ ...form, vehicleNumber: e.target.value.replace(/\s+/g, '').toUpperCase() })} placeholder="TN01AB1234" required />
                               <Field label="Customer Name" value={form.customerName} onChange={e => setForm({ ...form, customerName: e.target.value })} placeholder="John Doe" required />
+                              <FormControl isRequired>
+                                <FormLabel fontSize="11px" fontWeight="600" color={C.muted} letterSpacing="0.06em" mb={1.5}>Vehicle Type</FormLabel>
+                                <Select value={form.vehicleType} onChange={e => setForm({ ...form, vehicleType: e.target.value })}
+                                  bg={C.surface} border={`1px solid ${C.border}`} borderRadius="9px"
+                                  color={C.text} fontSize="13px"
+                                  _focus={{ borderColor: C.borderFocus, boxShadow: "none" }}>
+                                  <option value="Compact">Compact</option>
+                                  <option value="Sedan">Sedan</option>
+                                  <option value="SUV">SUV</option>
+                                  <option value="EV">EV</option>
+                                </Select>
+                              </FormControl>
                               <Field label="Mobile" value={form.mobileNumber} onChange={e => setForm({ ...form, mobileNumber: e.target.value })} placeholder="9876543210" />
                               <Field label="Email" value={form.email} onChange={e => setForm({ ...form, email: e.target.value })} placeholder="abc@example.com" />
                             </SimpleGrid>
@@ -642,7 +721,7 @@ function Dashboard({ tabName }) {
                             <Stack spacing={2}>
                               <ActionRow color={C.teal} soft={C.tealSoft} icon={BadgeCheck} title="Approve Request" sub="Approve check-in and update status" loading={busy === "valet:acknowledge"} onClick={() => run("acknowledge", "valet")} />
                               <ActionRow color={C.green} soft={C.greenSoft} icon={CheckCircle2} title="Mark Ready" sub="Vehicle serviced, awaiting pickup" loading={busy === "valet:ready"} onClick={() => run("ready", "valet")} />
-                              <ActionRow color={C.indigo} soft={C.indigoSoft} icon={CarFront} title="Accept Checkout" sub="Confirm handoff to customer" loading={busy === "valet:checkout"} onClick={() => run("checkout", "valet")} />
+                              <ActionRow color={C.indigo} soft={C.indigoSoft} icon={CarFront} title="Accept Checkout (Billing)" sub="Calculate bill and take payment" loading={busy === "valet:checkout"} onClick={handleInitiateCheckout} />
                             </Stack>
                           </Section>
                         )}
@@ -697,6 +776,17 @@ function Dashboard({ tabName }) {
                                 Refresh
                               </AppBtn>
                             </Flex>
+                            <Box bg={C.faint} border={`1px solid ${C.border}`} borderRadius="10px" p={4} mt={2} mb={4}>
+                              <Text fontSize="12px" fontWeight="700" color={C.text} mb={2}>Surge Pricing Configuration</Text>
+                              <Flex gap={3} align="flex-end">
+                                <Box flex={1}>
+                                  <Field label="Surge Multiplier (e.g. 1.5 for peak)" value={surgeInput} onChange={e => setSurgeInput(e.target.value)} placeholder="1.0" />
+                                </Box>
+                                <AppBtn color={C.indigo} soft={C.indigoSoft} icon={Zap} loading={busy === "admin:surge"} onClick={handleSetSurge}>
+                                  Update Surge
+                                </AppBtn>
+                              </Flex>
+                            </Box>
                             <SimpleGrid columns={{ base: 1, md: 2 }} spacing={4}>
                               <VehicleTable title="In Lot" icon={Car} iconColor={C.blue} visits={active} />
                               <VehicleTable title="All History" icon={TrendingUp} iconColor={C.indigo} visits={visits} />
@@ -797,7 +887,7 @@ function Dashboard({ tabName }) {
                               </Flex>
                               <Box flex={1} minW={0}>
                                 <Text fontWeight="800" fontSize="15px" color={C.text}>{tlVisit.vehicleNumber ?? "—"}</Text>
-                                <Text fontSize="12px" color={C.muted}>{tlVisit.customerName} · Visit #{tlVisit.id}</Text>
+                                <Text fontSize="12px" color={C.muted}>{tlVisit.customerName} · {tlVisit.vehicleType} · Visit #{tlVisit.id}</Text>
                               </Box>
                               <StatusPill status={tlVisit.status} />
                             </Flex>
@@ -905,7 +995,7 @@ function Dashboard({ tabName }) {
                                 <Box flex={1} minW={0}>
                                   <Text fontSize="13px" fontWeight="700" color={C.text}>{v.vehicleNumber}</Text>
                                   <Text fontSize="11px" color={C.muted} isTruncated>
-                                    {v.customerName} · <Text as="span" color={vZone.color} fontWeight="600">{vZone.key}</Text>
+                                    {v.customerName} · {v.vehicleType} {v.slotId ? `· Slot ${v.slotId}` : ""} · <Text as="span" color={vZone.color} fontWeight="600">{vZone.key}</Text>
                                   </Text>
                                 </Box>
                                 <StatusPill status={v.status} />
@@ -963,25 +1053,26 @@ function Dashboard({ tabName }) {
                           <SimpleGrid columns={{ base: 5, sm: 5, md: 10, xl: 5, "2xl": 10 }} spacing={1.5}>
                             {zs.map(slot => {
                               const occupied = slot.occupied;
+                              const vColor = occupied && slot.vehicle ? (STATUS[slot.vehicle.status]?.color || zone.color) : zone.color;
                               return (
                                 <Box key={slot.code} h="44px" position="relative"
-                                  bg={occupied ? zone.color + "0a" : "transparent"}
-                                  borderLeft={`2px solid ${occupied ? zone.color : C.border}`}
-                                  borderRight={`2px solid ${occupied ? zone.color : C.border}`}
+                                  bg={occupied ? vColor + "0a" : "transparent"}
+                                  borderLeft={`2px solid ${occupied ? vColor : C.border}`}
+                                  borderRight={`2px solid ${occupied ? vColor : C.border}`}
                                   borderTop="1px dashed transparent"
                                   borderBottom="1px dashed transparent"
                                   p={1.5} display="flex" flexDirection="column" justifyContent="space-between"
                                   transition="all 0.18s"
-                                  _hover={{ bg: occupied ? zone.color + "14" : "#f1f3f7", transform: "translateY(-1px)", boxShadow: "0 2px 5px rgba(0,0,0,0.05)" }}
+                                  _hover={{ bg: occupied ? vColor + "14" : "#f1f3f7", transform: "translateY(-1px)", boxShadow: "0 2px 5px rgba(0,0,0,0.05)" }}
                                   cursor="pointer"
                                   title={slot.vehicle ? `${slot.code}: ${slot.vehicle.vehicleNumber} (${slot.vehicle.status})` : `${slot.code}: free`}>
 
                                   {/* Smart LED status light */}
                                   <Box position="absolute" top="5px" right="5px" w="4.5px" h="4.5px" borderRadius="full"
-                                    bg={occupied ? zone.color : "#cbd5e1"}
-                                    boxShadow={occupied ? `0 0 5px ${zone.color}` : "none"} />
+                                    bg={occupied ? vColor : "#cbd5e1"}
+                                    boxShadow={occupied ? `0 0 5px ${vColor}` : "none"} />
 
-                                  <Text fontSize="8px" fontWeight="800" fontFamily="mono" color={occupied ? zone.color : C.muted} lineHeight={1}>
+                                  <Text fontSize="8px" fontWeight="800" fontFamily="mono" color={occupied ? vColor : C.muted} lineHeight={1}>
                                     {slot.code}
                                   </Text>
                                   <Text fontSize="9px" fontWeight="700" fontFamily="mono" color={occupied ? C.text : C.muted} isTruncated>
@@ -1016,6 +1107,65 @@ function Dashboard({ tabName }) {
           </Stack>
         </Box>
       </Box>
+
+      {/* ── Billing Modal ── */}
+      <Modal isOpen={billModalOpen} onClose={() => setBillModalOpen(false)} isCentered>
+        <ModalOverlay bg="blackAlpha.400" backdropFilter="blur(4px)" />
+        <ModalContent borderRadius="16px" overflow="hidden">
+          <ModalHeader bg={C.faint} borderBottom={`1px solid ${C.border}`} py={4}>
+            <Flex align="center" gap={3}>
+              <Flex w="32px" h="32px" borderRadius="8px" bg={C.indigoSoft} align="center" justify="center">
+                <Icon as={CreditCard} boxSize={4} color={C.indigo} />
+              </Flex>
+              <Box>
+                <Text fontSize="16px" fontWeight="700" color={C.text} lineHeight={1}>Checkout & Billing</Text>
+                <Text fontSize="12px" color={C.muted} mt={1}>Review charges and complete payment</Text>
+              </Box>
+            </Flex>
+          </ModalHeader>
+          <ModalCloseButton top={4} right={4} />
+          
+          <ModalBody py={5}>
+            {billData ? (
+              <Stack spacing={4}>
+                <Box bg={C.faint} border={`1px solid ${C.border}`} borderRadius="10px" p={4}>
+                  <Flex justify="space-between" mb={2}>
+                    <Text fontSize="13px" color={C.sub}>Duration</Text>
+                    <Text fontSize="13px" fontWeight="600">{billData.durationHours.toFixed(2)} hours</Text>
+                  </Flex>
+                  <Flex justify="space-between" mb={2}>
+                    <Text fontSize="13px" color={C.sub}>Base Rate</Text>
+                    <Text fontSize="13px" fontWeight="600">${billData.baseRate.toFixed(2)} / hr</Text>
+                  </Flex>
+                  <Flex justify="space-between" mb={3}>
+                    <Text fontSize="13px" color={C.sub}>Surge Multiplier</Text>
+                    <Text fontSize="13px" fontWeight="600">{billData.surgeMultiplier}x</Text>
+                  </Flex>
+                  <Divider mb={3} borderColor={C.border} />
+                  <Flex justify="space-between" align="center">
+                    <Text fontSize="15px" fontWeight="700" color={C.text}>Total Fee</Text>
+                    <Text fontSize="20px" fontWeight="800" color={C.indigo}>${billData.totalFee.toFixed(2)}</Text>
+                  </Flex>
+                </Box>
+                <Text fontSize="11px" color={C.muted} textAlign="center">
+                  Simulating payment gateway (Stripe/Razorpay) success.
+                </Text>
+              </Stack>
+            ) : (
+              <Flex justify="center" py={4}><Text fontSize="13px" color={C.muted}>Loading bill details...</Text></Flex>
+            )}
+          </ModalBody>
+
+          <ModalFooter borderTop={`1px solid ${C.border}`} bg={C.faint} py={4}>
+            <Button variant="ghost" mr={3} onClick={() => setBillModalOpen(false)} fontSize="13px">Cancel</Button>
+            <Button colorScheme="indigo" bg={C.indigo} _hover={{ bg: "#4f46e5" }} color="white" 
+              onClick={handlePaymentWebhook} isLoading={busy === "payment"} fontSize="13px" px={6}>
+              Simulate Payment & Checkout
+            </Button>
+          </ModalFooter>
+        </ModalContent>
+      </Modal>
+
     </Flex>
   );
 }
@@ -1137,7 +1287,10 @@ function VehicleTable({ title, icon, iconColor, visits }) {
             <Flex justify="space-between" align="center" gap={2}>
               <Box minW={0}>
                 <Text fontSize="13px" fontWeight="700" color={C.text}>{v.vehicleNumber}</Text>
-                <Text fontSize="11px" color={C.muted} isTruncated>{v.customerName}</Text>
+                <Text fontSize="11px" color={C.muted} isTruncated>
+                  {v.customerName} · {v.vehicleType}
+                  {v.slotId ? ` · Slot ${v.slotId}` : ""}
+                </Text>
               </Box>
               <StatusPill status={v.status} />
             </Flex>

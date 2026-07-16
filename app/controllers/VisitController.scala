@@ -2,8 +2,7 @@ package controllers
 
 import javax.inject._
 import actions.RoleAction
-import models.Role
-import models.Visit
+import models.{Role, Visit, Bill}
 import play.api.libs.json._
 import play.api.mvc._
 import service.VisitService
@@ -30,6 +29,7 @@ class VisitController @Inject()(
   private def allowed(role: Option[Role], roles: Set[Role]): Boolean =
     role.exists(roles.contains)
 
+  // --- Visit Operations ---
   def checkIn = roleAction.async(parse.json) { request =>
     if (request.role.isEmpty) {
       unauthorized
@@ -44,7 +44,8 @@ class VisitController @Inject()(
         customerName = (json \ "customerName").as[String],
         status = (json \ "status").as[String],
         email = (json \ "email").asOpt[String].filter(_.trim.nonEmpty),
-        phoneNumber = (json \ "phoneNumber").asOpt[String].filter(_.trim.nonEmpty)
+        phoneNumber = (json \ "phoneNumber").asOpt[String].filter(_.trim.nonEmpty),
+        vehicleType = (json \ "vehicleType").as[String]
       )
 
       visitService.checkIn(visit).map { generatedId =>
@@ -94,6 +95,7 @@ class VisitController @Inject()(
     }
   }
 
+  // --- Vehicle Workflow ---
   def requestVehicle(id: Long) = roleAction.async { request =>
     if (request.role.isEmpty) {
       unauthorized
@@ -170,6 +172,7 @@ class VisitController @Inject()(
     }
   }
 
+  // --- Add-On Services ---
   def addOn(id: Long) = roleAction.async(parse.json) { request =>
     if (request.role.isEmpty) {
       unauthorized
@@ -254,13 +257,14 @@ class VisitController @Inject()(
     }
   }
 
+  // --- Checkout ---
   def checkOut(id: Long) = roleAction.async { request =>
     if (request.role.isEmpty) {
       unauthorized
     } else if (!allowed(request.role, Set(Role.Valet, Role.Admin))) {
       forbidden
     } else {
-      visitService.checkOut(id).map { _ =>
+      visitService.finalizeCheckout(id).map { _ =>
         Ok(Json.obj(
           "message" -> s"Vehicle with id $id has been successfully checked out"
         ))
@@ -269,6 +273,52 @@ class VisitController @Inject()(
           BadRequest(Json.obj(
             "error" -> ex.getMessage
           ))
+      }
+    }
+  }
+  def getBill(id: Long) = roleAction.async { request =>
+    if (request.role.isEmpty) {
+      unauthorized
+    } else {
+      visitService.calculateBill(id).map { bill =>
+        Ok(Json.toJson(bill))
+      }.recover {
+        case ex: Exception =>
+          BadRequest(Json.obj("error" -> ex.getMessage))
+      }
+    }
+  }
+
+  def paymentWebhook() = Action.async(parse.json) { request =>
+    val visitId = (request.body \ "visitId").asOpt[Long]
+    visitId match {
+      case Some(id) =>
+        visitService.calculateBill(id).flatMap { bill =>
+          visitService.finalizeCheckout(id).map { _ =>
+            Ok(Json.obj(
+              "message" -> s"Payment successful, visit $id checked out.",
+              "totalFee" -> bill.totalFee,
+              "durationHours" -> bill.durationHours
+            ))
+          }
+        }.recover {
+          case ex: Exception => BadRequest(Json.obj("error" -> ex.getMessage))
+        }
+      case None => Future.successful(BadRequest(Json.obj("error" -> "Missing visitId")))
+    }
+  }
+
+  def setSurge() = roleAction.async(parse.json) { request =>
+    if (!allowed(request.role, Set(Role.Admin))) {
+      forbidden
+    } else {
+      val multiplier = (request.body \ "multiplier").asOpt[Double]
+      multiplier match {
+        case Some(m) =>
+          visitService.setSurgeMultiplier(m).map { _ =>
+            Ok(Json.obj("message" -> s"Surge multiplier updated to $m"))
+          }
+        case None => Future.successful(BadRequest(Json.obj("error" -> "Missing multiplier")))
       }
     }
   }

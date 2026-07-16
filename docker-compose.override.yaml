@@ -4,6 +4,11 @@
 
 services:
   backend:
+    build:
+      target: builder
+    volumes:
+      - .:/app
+    command: ["sbt", "run"]
     environment:
       # Development environment
       PLAY_ENVIRONMENT: development

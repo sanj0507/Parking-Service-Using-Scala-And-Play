@@ -9,7 +9,11 @@ case class Visit(
     status: String,
     createdAt: String = "",
     email: Option[String] = None,
-    phoneNumber: Option[String] = None
+    phoneNumber: Option[String] = None,
+    vehicleType: String,
+    slotId: Option[Long] = None,
+    checkoutAt: Option[String] = None,
+    totalFee: Option[Double] = None
 )
 
 object Visit {
@@ -24,6 +28,10 @@ case class VisitWithAddOns(
     createdAt: String,
     email: Option[String],
     phoneNumber: Option[String],
+    vehicleType: String,
+    slotId: Option[Long],
+    checkoutAt: Option[String],
+    totalFee: Option[Double],
     addOns: Seq[AddOnRequest]
 )
 
@@ -39,6 +47,22 @@ object VisitWithAddOns {
       createdAt = visit.createdAt,
       email = visit.email,
       phoneNumber = visit.phoneNumber,
+      vehicleType = visit.vehicleType,
+      slotId = visit.slotId,
+      checkoutAt = visit.checkoutAt,
+      totalFee = visit.totalFee,
       addOns = addOns
     )
+}
+
+case class Bill(
+    visitId: Long,
+    durationHours: Double,
+    baseRate: Double,
+    surgeMultiplier: Double,
+    totalFee: Double
+)
+
+object Bill {
+  implicit val format: OFormat[Bill] = Json.format[Bill]
 }
