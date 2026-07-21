@@ -16,7 +16,7 @@ import scala.concurrent.{ExecutionContext, Future}
 class KafkaConsumerService @Inject()(
     config: Configuration,
     lifecycle: ApplicationLifecycle,
-    mailerClient: MailerClient
+  mailerClient: MailerClient
 )(implicit ec: ExecutionContext) {
 
   private val bootstrapServers = config.getOptional[String]("kafka.bootstrap.servers").getOrElse("localhost:9092")

@@ -26,6 +26,7 @@ class SmsKafkaConsumerService @Inject()(
   private val twilioSid = config.getOptional[String]("twilio.accountSid").getOrElse("default_sid")
   private val twilioToken = config.getOptional[String]("twilio.authToken").getOrElse("default_token")
   private val fromPhone = new PhoneNumber(config.getOptional[String]("twilio.phoneNumber").getOrElse("+1234567890"))
+  private val defaultCountryCode = config.getOptional[String]("twilio.defaultCountryCode").getOrElse("+91")
   
   if (twilioSid != "default_sid") {
     Twilio.init(twilioSid, twilioToken)
@@ -59,7 +60,11 @@ class SmsKafkaConsumerService @Inject()(
 
           (phoneOpt, messageOpt) match {
             case (Some(phone), Some(message)) if phone.nonEmpty =>
-              sendSms(phone, message)
+              SmsPhoneNumberFormatter.normalize(phone, defaultCountryCode) match {
+                case Some(normalizedPhone) => sendSms(normalizedPhone, message)
+                case None =>
+                  println(s"Skipping SMS delivery: invalid phone number format in ${record.value()}")
+              }
             case _ =>
               println(s"Skipping SMS delivery: invalid payload or empty phone in ${record.value()}")
           }
