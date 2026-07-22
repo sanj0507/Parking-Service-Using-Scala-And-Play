@@ -117,8 +117,8 @@ export const parkingApi = {
     }),
 
   // --- Checkout ---
-  checkOut: (role, id) =>
-    apiRequest(role, `/visits/${id}/check-out`, { method: "POST" }),
+  acceptCheckout: (role, id) =>
+    apiRequest(role, `/visits/${id}/accept-checkout`, { method: "POST" }),
 
   // --- User Management ---
   signup: async (username, email, password) => {

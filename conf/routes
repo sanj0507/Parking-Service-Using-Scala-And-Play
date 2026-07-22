@@ -98,7 +98,7 @@ POST    /api/valet/visits/:id/acknowledge controllers.VisitController.acknowledg
 + nocsrf
 POST    /api/valet/visits/:id/ready  controllers.VisitController.ready(id: Long)
 + nocsrf
-POST    /api/valet/visits/:id/check-out controllers.VisitController.checkOut(id: Long)
+POST    /api/valet/visits/:id/accept-checkout       controllers.VisitController.acceptCheckout(id: Long)
 + nocsrf
 POST    /api/valet/visits/:id/add-ons/start controllers.VisitController.startAddOn(id: Long)
 + nocsrf
@@ -151,6 +151,8 @@ POST    /api/admin/visits/:id/check-out controllers.VisitController.checkOut(id:
 
 GET     /api/visits/:id/bill         controllers.VisitController.getBill(id: Long)
 + nocsrf
-POST    /api/webhook/payment         controllers.VisitController.paymentWebhook
+POST    /api/visits/:id/request-checkout controllers.VisitController.publicRequestCheckout(id: Long)
 + nocsrf
-POST    /api/admin/surge             controllers.VisitController.setSurge
+POST    /api/webhook/payment         controllers.VisitController.paymentWebhook()
++ nocsrf
+POST    /api/admin/surge             controllers.VisitController.setSurge()

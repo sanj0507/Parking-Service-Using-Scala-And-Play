@@ -14,6 +14,7 @@ import { useEffect, useMemo, useState } from "react";
 import { BrowserRouter, Routes, Route, Navigate, useNavigate } from "react-router-dom";
 import { parkingApi } from "./api/parkingApi.js";
 import Login from "./Login.jsx";
+import Checkout from "./Checkout.jsx";
 
 /* ─── Palette ────────────────────────────────────────────────── */
 const C = {
@@ -228,6 +229,7 @@ export default function App() {
         <Route path="/valet" element={<ProtectedRoute allowedRole="Valet"><Dashboard tabName="valet" /></ProtectedRoute>} />
         <Route path="/advisor" element={<ProtectedRoute allowedRole="Service Advisor"><Dashboard tabName="user" /></ProtectedRoute>} />
         <Route path="/timeline" element={<ProtectedRoute allowedRole="Admin"><Dashboard tabName="timeline" /></ProtectedRoute>} />
+        <Route path="/checkout/:visitId" element={<Checkout />} />
         <Route path="*" element={<Navigate to="/login" replace />} />
       </Routes>
     </BrowserRouter>
@@ -291,6 +293,8 @@ function Dashboard({ tabName }) {
   }
 
   const actualVisitId = useMemo(() => resolveVisitId(visitInput), [visitInput, visits]);
+  const currentVisit = useMemo(() => visits.find(v => v.id === actualVisitId) ?? null, [visits, actualVisitId]);
+  const canInitiateCheckout = currentVisit?.status === "RequestedCheckout";
 
   // Load add-ons automatically when actualVisitId or tab changes
   useEffect(() => {
@@ -410,13 +414,23 @@ function Dashboard({ tabName }) {
       toast({ title: "Invalid Visit ID", status: "warning", duration: 2000 });
       return;
     }
+    if (currentVisit?.status !== "RequestedCheckout") {
+      toast({
+        title: "Checkout not requested",
+        description: "Request checkout first before accepting.",
+        status: "warning",
+        duration: 3000,
+        position: "bottom-right"
+      });
+      return;
+    }
     setBusy("valet:checkout");
     try {
-      const bill = await parkingApi.getBill(actualVisitId);
-      setBillData(bill);
-      setBillModalOpen(true);
+      await parkingApi.acceptCheckout("valet", actualVisitId);
+      toast({ title: "Checkout Accepted", description: "Vehicle is now awaiting payment.", status: "success", duration: 3000 });
+      await go("load", "admin");
     } catch (e) {
-      toast({ title: "Failed to generate bill", description: e.message, status: "error", duration: 3000 });
+      toast({ title: "Failed to accept checkout", description: e.message, status: "error", duration: 3000 });
     } finally {
       setBusy("");
     }
@@ -721,7 +735,7 @@ function Dashboard({ tabName }) {
                             <Stack spacing={2}>
                               <ActionRow color={C.teal} soft={C.tealSoft} icon={BadgeCheck} title="Approve Request" sub="Approve check-in and update status" loading={busy === "valet:acknowledge"} onClick={() => run("acknowledge", "valet")} />
                               <ActionRow color={C.green} soft={C.greenSoft} icon={CheckCircle2} title="Mark Ready" sub="Vehicle serviced, awaiting pickup" loading={busy === "valet:ready"} onClick={() => run("ready", "valet")} />
-                              <ActionRow color={C.indigo} soft={C.indigoSoft} icon={CarFront} title="Accept Checkout (Billing)" sub="Calculate bill and take payment" loading={busy === "valet:checkout"} onClick={handleInitiateCheckout} />
+                              <ActionRow color={C.indigo} soft={C.indigoSoft} icon={CarFront} title="Approve Checkout" sub="Approve checkout for payment" loading={busy === "valet:checkout"} disabled={!canInitiateCheckout} onClick={handleInitiateCheckout} />
                             </Stack>
                           </Section>
                         )}
@@ -1108,63 +1122,7 @@ function Dashboard({ tabName }) {
         </Box>
       </Box>
 
-      {/* ── Billing Modal ── */}
-      <Modal isOpen={billModalOpen} onClose={() => setBillModalOpen(false)} isCentered>
-        <ModalOverlay bg="blackAlpha.400" backdropFilter="blur(4px)" />
-        <ModalContent borderRadius="16px" overflow="hidden">
-          <ModalHeader bg={C.faint} borderBottom={`1px solid ${C.border}`} py={4}>
-            <Flex align="center" gap={3}>
-              <Flex w="32px" h="32px" borderRadius="8px" bg={C.indigoSoft} align="center" justify="center">
-                <Icon as={CreditCard} boxSize={4} color={C.indigo} />
-              </Flex>
-              <Box>
-                <Text fontSize="16px" fontWeight="700" color={C.text} lineHeight={1}>Checkout & Billing</Text>
-                <Text fontSize="12px" color={C.muted} mt={1}>Review charges and complete payment</Text>
-              </Box>
-            </Flex>
-          </ModalHeader>
-          <ModalCloseButton top={4} right={4} />
-          
-          <ModalBody py={5}>
-            {billData ? (
-              <Stack spacing={4}>
-                <Box bg={C.faint} border={`1px solid ${C.border}`} borderRadius="10px" p={4}>
-                  <Flex justify="space-between" mb={2}>
-                    <Text fontSize="13px" color={C.sub}>Duration</Text>
-                    <Text fontSize="13px" fontWeight="600">{billData.durationHours.toFixed(2)} hours</Text>
-                  </Flex>
-                  <Flex justify="space-between" mb={2}>
-                    <Text fontSize="13px" color={C.sub}>Base Rate</Text>
-                    <Text fontSize="13px" fontWeight="600">${billData.baseRate.toFixed(2)} / hr</Text>
-                  </Flex>
-                  <Flex justify="space-between" mb={3}>
-                    <Text fontSize="13px" color={C.sub}>Surge Multiplier</Text>
-                    <Text fontSize="13px" fontWeight="600">{billData.surgeMultiplier}x</Text>
-                  </Flex>
-                  <Divider mb={3} borderColor={C.border} />
-                  <Flex justify="space-between" align="center">
-                    <Text fontSize="15px" fontWeight="700" color={C.text}>Total Fee</Text>
-                    <Text fontSize="20px" fontWeight="800" color={C.indigo}>${billData.totalFee.toFixed(2)}</Text>
-                  </Flex>
-                </Box>
-                <Text fontSize="11px" color={C.muted} textAlign="center">
-                  Simulating payment gateway (Stripe/Razorpay) success.
-                </Text>
-              </Stack>
-            ) : (
-              <Flex justify="center" py={4}><Text fontSize="13px" color={C.muted}>Loading bill details...</Text></Flex>
-            )}
-          </ModalBody>
 
-          <ModalFooter borderTop={`1px solid ${C.border}`} bg={C.faint} py={4}>
-            <Button variant="ghost" mr={3} onClick={() => setBillModalOpen(false)} fontSize="13px">Cancel</Button>
-            <Button colorScheme="indigo" bg={C.indigo} _hover={{ bg: "#4f46e5" }} color="white" 
-              onClick={handlePaymentWebhook} isLoading={busy === "payment"} fontSize="13px" px={6}>
-              Simulate Payment & Checkout
-            </Button>
-          </ModalFooter>
-        </ModalContent>
-      </Modal>
 
     </Flex>
   );
@@ -1229,14 +1187,14 @@ function AppBtn({ color, soft, icon, children, outline, loading, size = "md", on
   );
 }
 
-function ActionRow({ color, soft, icon, title, sub, loading, onClick }) {
+function ActionRow({ color, soft, icon, title, sub, loading, disabled, onClick }) {
   return (
-    <Flex as="button" onClick={onClick} disabled={loading}
+    <Flex as="button" onClick={disabled ? undefined : onClick} disabled={loading || disabled}
       align="center" gap={3} px={4} py={3}
       bg={C.surface} borderRadius="10px" border={`1px solid ${C.border}`}
       _hover={{ borderColor: color, bg: soft, boxShadow: `0 2px 10px ${color}14` }}
       transition="all 0.14s" w="full"
-      opacity={loading ? 0.5 : 1} cursor={loading ? "not-allowed" : "pointer"}>
+      opacity={loading || disabled ? 0.5 : 1} cursor={loading || disabled ? "not-allowed" : "pointer"}>
       <Flex w="32px" h="32px" borderRadius="8px" bg={soft}
         align="center" justify="center" flexShrink={0}>
         <Icon as={icon} boxSize={4} color={color} />

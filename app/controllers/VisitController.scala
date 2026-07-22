@@ -276,18 +276,52 @@ class VisitController @Inject()(
       }
     }
   }
-  def getBill(id: Long) = roleAction.async { request =>
+
+  def acceptCheckout(id: Long) = roleAction.async { request =>
     if (request.role.isEmpty) {
       unauthorized
+    } else if (!allowed(request.role, Set(Role.Valet, Role.Admin))) {
+      forbidden
     } else {
-      visitService.calculateBill(id).map { bill =>
-        Ok(Json.toJson(bill))
+      visitService.acceptCheckoutRequest(id).map { _ =>
+        Ok(Json.obj(
+          "message" -> s"Checkout accepted for visit $id. Awaiting payment."
+        ))
       }.recover {
         case ex: Exception =>
-          BadRequest(Json.obj("error" -> ex.getMessage))
+          BadRequest(Json.obj(
+            "error" -> ex.getMessage
+          ))
       }
     }
   }
+  def getBill(id: Long) = Action.async { request =>
+    visitService.getVisitById(id).flatMap {
+      case Some(visit) =>
+        visitService.calculateBill(id).map { bill =>
+          Ok(Json.toJson(bill).as[JsObject] ++ Json.obj("status" -> visit.status))
+        }
+      case None =>
+        Future.successful(NotFound(Json.obj("error" -> s"Visit with id $id not found")))
+    }.recover {
+      case ex: Exception =>
+        BadRequest(Json.obj("error" -> ex.getMessage))
+    }
+  }
+
+  def publicRequestCheckout(id: Long) = Action.async { request =>
+    visitService.requestCheckout(id).map { _ =>
+      Ok(Json.obj(
+        "message" -> s"Checkout requested successfully for visit $id"
+      ))
+    }.recover {
+      case ex: Exception =>
+        BadRequest(Json.obj(
+          "error" -> ex.getMessage
+        ))
+    }
+  }
+
 
   def paymentWebhook() = Action.async(parse.json) { request =>
     val visitId = (request.body \ "visitId").asOpt[Long]

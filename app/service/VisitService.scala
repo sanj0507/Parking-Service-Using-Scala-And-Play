@@ -4,7 +4,7 @@ import java.time.LocalDateTime
 import java.time.format.DateTimeFormatter
 import java.time.temporal.ChronoUnit
 import javax.inject._
-import models.{AddOnRequest, AddOnStatus, Visit, VisitWithAddOns, Bill}
+import models.{AddOnRequest, AddOnStatus, Bill, Visit, VisitWithAddOns}
 import play.api.cache.AsyncCacheApi
 import play.api.libs.json.Json
 import repository.VisitRepository
@@ -19,7 +19,8 @@ class VisitService @Inject()(
     repo: VisitRepository,
     slotRepo: repository.ParkingSlotRepository,
     cache: AsyncCacheApi,
-    kafkaService: KafkaProducerService
+    kafkaService: KafkaProducerService,
+    config: play.api.Configuration
 )(implicit ec: ExecutionContext) {
   def initialize(): Future[Unit] =
     for {
@@ -128,7 +129,7 @@ class VisitService @Inject()(
     )
 
     for {
-      _ <- Future.sequence(visits.map(repo.insert)).map(_ => ())
+      visitIds <- Future.sequence(visits.map(repo.insert))
       _ <- slotRepo.updateStatus(1, "Occupied")
       _ <- slotRepo.updateStatus(2, "Occupied")
       _ <- slotRepo.updateStatus(3, "Occupied")
@@ -218,13 +219,15 @@ class VisitService @Inject()(
                     _ <- {
                       val time = LocalDateTime.now().format(DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss"))
                       val location = "A%02d".format(slot.slotNumber)
+                      val msg = s"your vehicle ${visit.vehicleNumber} has been accepted for check-in at $time and parked at $location"
+                      
                       val payload = Json.obj(
                         "email" -> play.api.libs.json.JsString(visit.email.getOrElse("")),
-                        "message" -> play.api.libs.json.JsString(s"your vehicle ${visit.vehicleNumber} has been accepted for check-in at $time and parked at $location")
+                        "message" -> play.api.libs.json.JsString(msg)
                       ).toString()
                       kafkaService.sendEmailNotification(payload)
                       visit.phoneNumber.foreach { phone =>
-                        kafkaService.sendSmsNotification(phone, s"your vehicle ${visit.vehicleNumber} has been accepted for check-in at $time and parked at $location")
+                        kafkaService.sendSmsNotification(phone, msg)
                       }
                       cache.remove("visits-with-addons")
                     }
@@ -273,25 +276,15 @@ class VisitService @Inject()(
     }
   }
 
-  def acceptCheckoutRequest(id: Long, totalFee: Option[Double] = None): Future[Int] =
+  def acceptCheckoutRequest(id: Long): Future[Int] =
     repo.getById(id).flatMap {
       case Some(visit) if visit.status == models.VisitStatus.RequestedCheckout =>
-        val freeSlotFuture = visit.slotId match {
-          case Some(slotId) =>
-            slotRepo.updateStatus(slotId, "Available").flatMap(_ => repo.updateSlot(id, None))
-          case None =>
-            Future.successful(())
-        }
-
-        freeSlotFuture.flatMap { _ =>
-          repo.updateStatus(id, models.VisitStatus.CheckedOut).flatMap { res =>
-            sendCheckoutNotifications(visit, totalFee)
-            Future.successful(res)
-          }
+        repo.updateStatus(id, models.VisitStatus.AwaitingPayment).flatMap { res =>
+          Future.successful(res)
         }
 
       case Some(_) =>
-        Future.failed(new Exception("Vehicle can only be checked out after a checkout request"))
+        Future.failed(new Exception("Vehicle can only be accepted for checkout if it has been requested"))
 
       case None =>
         Future.failed(new Exception(s"Visit with id $id not found"))
@@ -304,13 +297,17 @@ class VisitService @Inject()(
           case models.VisitStatus.CheckedIn | models.VisitStatus.InProgress =>
             repo.updateStatus(id, models.VisitStatus.Ready).flatMap { res =>
               val locationOpt = visit.slotId.map(s => "D%02d".format(s)).getOrElse("unknown")
+              val frontendUrl = config.getOptional[String]("app.frontend.url").getOrElse("http://localhost:3000")
+              val checkoutUrl = s"$frontendUrl/checkout/$id"
+              val msg = s"your vehicle ${visit.vehicleNumber} has been serviced and is now ready for check-out at $locationOpt. You can checkout using this link: $checkoutUrl"
+              
               val payload = Json.obj(
                 "email" -> play.api.libs.json.JsString(visit.email.getOrElse("")),
-                "message" -> play.api.libs.json.JsString(s"your vehicle ${visit.vehicleNumber} has been serviced and is now ready for check-out at $locationOpt")
+                "message" -> play.api.libs.json.JsString(msg)
               ).toString()
               kafkaService.sendEmailNotification(payload)
               visit.phoneNumber.foreach { phone =>
-                kafkaService.sendSmsNotification(phone, s"your vehicle ${visit.vehicleNumber} has been serviced and is now ready for check-out at $locationOpt")
+                kafkaService.sendSmsNotification(phone, msg)
               }
               cache.remove("visits-with-addons").map(_ => res)
             }
@@ -403,13 +400,17 @@ class VisitService @Inject()(
             repo.getById(id).map {
               case Some(v) => 
                 val locationOpt = v.slotId.map(s => "D%02d".format(s)).getOrElse("unknown")
+                val frontendUrl = config.getOptional[String]("app.frontend.url").getOrElse("http://localhost:3000")
+                val checkoutUrl = s"$frontendUrl/checkout/${v.id}"
+                val msg = s"your vehicle ${v.vehicleNumber} has been serviced and is now ready for check-out at $locationOpt. You can checkout using this link: $checkoutUrl"
+                
                 val payload = Json.obj(
                   "email" -> play.api.libs.json.JsString(v.email.getOrElse("")),
-                  "message" -> play.api.libs.json.JsString(s"your vehicle ${v.vehicleNumber} has been serviced and is now ready for check-out at $locationOpt")
+                  "message" -> play.api.libs.json.JsString(msg)
                 ).toString()
                 kafkaService.sendEmailNotification(payload)
                 v.phoneNumber.foreach { phone =>
-                  kafkaService.sendSmsNotification(phone, s"your vehicle ${v.vehicleNumber} has been serviced and is now ready for check-out at $locationOpt")
+                  kafkaService.sendSmsNotification(phone, msg)
                 }
               case None =>
             }
@@ -441,21 +442,28 @@ class VisitService @Inject()(
 
   def finalizeCheckout(id: Long): Future[Int] = {
     repo.getById(id).flatMap {
-      case Some(visit) if visit.status == models.VisitStatus.RequestedCheckout || visit.status == models.VisitStatus.Ready =>
+      case Some(visit) if visit.status == models.VisitStatus.AwaitingPayment =>
         calculateBill(id).flatMap { bill =>
           val formatter = DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss")
           val checkoutAt = LocalDateTime.now().format(formatter)
           repo.updateCheckoutDetails(id, checkoutAt, bill.totalFee).flatMap { _ =>
-            if (visit.status == models.VisitStatus.Ready) {
-              repo.updateStatus(id, models.VisitStatus.RequestedCheckout).flatMap(_ => acceptCheckoutRequest(id, Some(bill.totalFee)))
-            } else {
-              acceptCheckoutRequest(id, Some(bill.totalFee))
+            val freeSlotFuture = visit.slotId match {
+              case Some(slotId) =>
+                slotRepo.updateStatus(slotId, "Available").flatMap(_ => repo.updateSlot(id, None))
+              case None =>
+                Future.successful(())
+            }
+            freeSlotFuture.flatMap { _ =>
+              repo.updateStatus(id, models.VisitStatus.CheckedOut).flatMap { res =>
+                sendCheckoutNotifications(visit, Some(bill.totalFee))
+                Future.successful(res)
+              }
             }
           }
         }
 
       case Some(_) =>
-        Future.failed(new Exception("Vehicle can only be checked out after a checkout request or once it is ready for checkout"))
+        Future.failed(new Exception("Vehicle can only be checked out after payment is requested (AwaitingPayment state)"))
 
       case None =>
         Future.failed(new Exception(s"Visit with id $id not found"))
@@ -516,5 +524,8 @@ class VisitService @Inject()(
       }
     }
   }
+
+  private def currentTimestamp(): String =
+    LocalDateTime.now().format(DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss"))
 
 }

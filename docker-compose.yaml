@@ -64,7 +64,20 @@ services:
       timeout: 10s
       retries: 3
       start_period: 40s
-
+  kafka-ui:
+    image: provectuslabs/kafka-ui:latest
+    container_name: kafka-ui
+    ports:
+      - "8080:8080"
+    environment:
+      DYNAMIC_CONFIG_ENABLED: "true"
+      KAFKA_CLUSTERS_0_NAME: local
+      KAFKA_CLUSTERS_0_BOOTSTRAPSERVERS: kafka:9092
+    networks:
+      - parking-network
+    depends_on:
+      - kafka
+    restart: unless-stopped
   kafka:
     image: apache/kafka:3.7.0
     container_name: valet_kafka

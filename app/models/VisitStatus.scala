@@ -14,6 +14,8 @@ object VisitStatus {
 
   val Ready = "Ready"
 
+  val AwaitingPayment = "AwaitingPayment"
+
   val CheckedOut = "CheckedOut"
 
   val allStatuses = Seq(
@@ -23,6 +25,7 @@ object VisitStatus {
     RequestedCheckout,
     InProgress,
     Ready,
+    AwaitingPayment,
     CheckedOut
   )
 }
