@@ -12,7 +12,7 @@ A robust, full-stack application for managing valet parking check-ins, retrieval
    - **Valet Attendant**: Acknowledges retrieval requests, processes vehicles, executes/tracks add-on services, and marks vehicles ready.
    - **Admin**: Approves new user sign-ups via dashboard, supervises all active visits, tracks histories, and runs administrative controls.
 2. **Visit Status Lifecycle**:
-   - `CheckedIn` ➔ `Requested` ➔ `InProgress` (Acknowledged) ➔ `Ready` (Ready for pickup) ➔ `CheckedOut`
+   - `CheckedIn` ➔ `Requested` ➔ `InProgress` (Acknowledged) ➔ `Ready` (Ready for pickup) ➔ `RequestedCheckout` ➔ `AwaitingPayment` ➔ `CheckedOut`
 3. **Add-on Services Tracking**:
    - Real-time management of extra tasks like `Car Wash` and `Priority Parking` with statuses: `Pending` ➔ `InProgress` ➔ `Completed`.
 4. **Dual Frontend Options**:
@@ -192,7 +192,10 @@ All API requests require role validation passed through the custom header `X-Use
 | `GET` | `/api/valet/visits/:id/add-ons` | Valet, Service Advisor, Admin | Get add-on requests for visit |
 | `POST` | `/api/valet/visits/:id/add-ons/start` | Valet, Admin | Start add-on service |
 | `POST` | `/api/valet/visits/:id/add-ons/complete`| Valet, Admin | Complete add-on service |
-| `POST` | `/api/valet/visits/:id/check-out` | Valet, Admin | Check-out vehicle |
+| `POST` | `/api/valet/visits/:id/accept-checkout` | Valet, Admin | Approve checkout request (moves to AwaitingPayment) |
+| `GET`  | `/api/visits/:id/bill` | Public/Customer | Get bill and status for checkout page |
+| `POST` | `/api/visits/:id/request-checkout` | Public/Customer | Customer requests vehicle checkout |
+| `POST` | `/api/webhook/payment` | Webhook | Process payment and complete checkout |
 
 ### Curl Command Examples
 
