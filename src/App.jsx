@@ -7,7 +7,7 @@ import {
 import {
   BadgeCheck, BellRing, Car, CarFront, CheckCircle2,
   Clock, CircleDot, KeyRound, LogOut, ParkingCircle,
-  RefreshCw, ShieldCheck, Timer, TrendingUp,
+  RefreshCw, ShieldCheck, Timer, TrendingUp, BarChart,
   UserRoundCheck, Wrench, Zap, ArrowRight, CreditCard
 } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
@@ -101,6 +101,7 @@ const SUB_TABS = {
   admin: [
     { key: "live_data", label: "Live Vehicle Data", icon: TrendingUp },
     { key: "tracker", label: "Vehicle Tracker", icon: Clock },
+    { key: "analytics", label: "Analytics Dashboard", icon: BarChart },
     { key: "pending_users", label: "Pending Signups", icon: UserRoundCheck }
   ]
 };
@@ -258,6 +259,7 @@ function Dashboard({ tabName }) {
   const [visits, setVisits] = useState([]);
   const [addOns, setAddOns] = useState([]);
   const [pendingUsers, setPendingUsers] = useState([]);
+  const [analyticsData, setAnalyticsData] = useState(null);
   const [busy, setBusy] = useState("");
   const [lastCheckedInVisit, setLastCheckedInVisit] = useState(null);
   const [billModalOpen, setBillModalOpen] = useState(false);
@@ -268,6 +270,42 @@ function Dashboard({ tabName }) {
   // Load visits automatically on mount
   useEffect(() => {
     go("load", "admin").catch(err => console.error("Error loading initial visits:", err));
+  }, []);
+
+  // Connect to WebSocket for live updates
+  useEffect(() => {
+    let ws;
+    let reconnectTimeout;
+
+    function connect() {
+      const protocol = window.location.protocol === "https:" ? "wss:" : "ws:";
+      ws = new WebSocket(`${protocol}//${window.location.host}/api/ws`);
+
+      ws.onmessage = (event) => {
+        if (event.data === "update") {
+          // Trigger a background refresh of all data types. 
+          // 'go' manages state setters safely.
+          go("load", "admin").catch(() => {});
+          go("loadAnalytics", "admin").catch(() => {});
+          go("loadPendingUsers", "admin").catch(() => {});
+        }
+      };
+
+      ws.onclose = () => {
+        // Auto reconnect after 3 seconds
+        reconnectTimeout = setTimeout(connect, 3000);
+      };
+    }
+
+    connect();
+
+    return () => {
+      clearTimeout(reconnectTimeout);
+      if (ws) {
+        ws.onclose = null; // Prevent reconnect on intentional unmount
+        ws.close();
+      }
+    };
   }, []);
 
   const nav = NAV.find(n => n.key === tab) ?? NAV[0];
@@ -307,6 +345,12 @@ function Dashboard({ tabName }) {
     }
   }, [actualVisitId, tab, role]);
 
+  useEffect(() => {
+    if (tab === "admin" && subTab === "analytics") {
+      run("loadAnalytics", "admin");
+    }
+  }, [tab, subTab]);
+
   async function run(action, r = role) {
     setBusy(`${r}:${action}`);
     try {
@@ -341,6 +385,10 @@ function Dashboard({ tabName }) {
       });
 
       // Auto reload lot map after each change (except loading actions)
+      // Note: Because we now have WebSockets broadcasting 'update', 
+      // the backend will trigger a reload for all connected clients (including this one),
+      // so we don't strictly need to do it manually here, but doing it manually
+      // makes the UI feel instantly responsive for the person who clicked it.
       if (action !== "load" && action !== "loadAddOns") {
         await go("load", "admin");
         if (actualVisitId && (tab === "valet" || tab === "user")) {
@@ -363,7 +411,7 @@ function Dashboard({ tabName }) {
   }
 
   async function go(action, r) {
-    if (!["load", "create", "loadPendingUsers"].includes(action) && !actualVisitId) throw new Error("Invalid Visit ID or Vehicle Number");
+    if (!["load", "create", "loadPendingUsers", "loadAnalytics"].includes(action) && !actualVisitId) throw new Error("Invalid Visit ID or Vehicle Number");
     switch (action) {
       case "create":
         if (!form.vehicleNumber.trim()) throw new Error("Vehicle number required");
@@ -390,6 +438,11 @@ function Dashboard({ tabName }) {
       case "loadPendingUsers": {
         const res = await parkingApi.getPendingUsers();
         setPendingUsers(res.body ?? []);
+        return res;
+      }
+      case "loadAnalytics": {
+        const res = await parkingApi.getAnalytics();
+        setAnalyticsData(res.body ?? null);
         return res;
       }
       default: throw new Error("Unknown action");
@@ -860,6 +913,74 @@ function Dashboard({ tabName }) {
                                     </Flex>
                                   </Flex>
                                 ))}
+                              </Stack>
+                            )}
+                          </Section>
+                        )}
+                        {subTab === "analytics" && (
+                          <Section label="Analytics Dashboard">
+                            <Flex justify="space-between" align="center" mt={2} mb={4}>
+                              <Text fontSize="13px" color={C.sub}>Key metrics for parking lot performance</Text>
+                              <AppBtn color={C.indigo} soft={C.indigoSoft} icon={RefreshCw} size="sm" loading={busy === "admin:loadAnalytics"} onClick={() => run("loadAnalytics", "admin")}>Refresh</AppBtn>
+                            </Flex>
+
+                            {!analyticsData ? (
+                              <Flex justify="center" py={10}>
+                                <Text fontSize="14px" color={C.muted}>Loading analytics...</Text>
+                              </Flex>
+                            ) : (
+                              <Stack spacing={4}>
+                                <SimpleGrid columns={{ base: 1, md: 3 }} spacing={4}>
+                                  <Box bg={C.faint} border={`1px solid ${C.border}`} borderRadius="10px" p={4}>
+                                    <Text fontSize="11px" fontWeight="700" color={C.muted} textTransform="uppercase">Avg Retrieval Time</Text>
+                                    <Text fontSize="24px" fontWeight="800" color={C.text} mt={1}>{analyticsData.averageRetrievalTimeMinutes.toFixed(1)} <Text as="span" fontSize="12px" color={C.muted}>mins</Text></Text>
+                                  </Box>
+                                  <Box bg={C.faint} border={`1px solid ${C.border}`} borderRadius="10px" p={4}>
+                                    <Text fontSize="11px" fontWeight="700" color={C.muted} textTransform="uppercase">Daily Revenue</Text>
+                                    <Text fontSize="24px" fontWeight="800" color={C.green} mt={1}>₹{analyticsData.dailyRevenue.toFixed(2)}</Text>
+                                  </Box>
+                                  <Box bg={C.faint} border={`1px solid ${C.border}`} borderRadius="10px" p={4}>
+                                    <Text fontSize="11px" fontWeight="700" color={C.muted} textTransform="uppercase">Total Visits (All Time)</Text>
+                                    <Text fontSize="24px" fontWeight="800" color={C.text} mt={1}>{analyticsData.totalVisits}</Text>
+                                  </Box>
+                                </SimpleGrid>
+
+                                <SimpleGrid columns={{ base: 1, lg: 2 }} spacing={4} mt={2}>
+                                  <Box bg={C.surface} border={`1px solid ${C.border}`} borderRadius="10px" p={4}>
+                                    <Text fontSize="13px" fontWeight="700" color={C.text} mb={3}>Peak Hours (Check-Ins)</Text>
+                                    {analyticsData.peakHours.length === 0 ? (
+                                      <Text fontSize="12px" color={C.muted}>No data available.</Text>
+                                    ) : (
+                                      <VStack align="stretch" spacing={2}>
+                                        {analyticsData.peakHours.slice(0, 5).map(p => (
+                                          <Flex key={p.hour} align="center" justify="space-between">
+                                            <Text fontSize="12px" color={C.sub}>{p.hour}:00 - {p.hour + 1}:00</Text>
+                                            <Flex align="center" gap={2}>
+                                              <Box w={`${Math.min(p.count * 10, 100)}px`} h="6px" bg={C.blue} borderRadius="full" />
+                                              <Text fontSize="12px" fontWeight="600" color={C.text} w="20px" textAlign="right">{p.count}</Text>
+                                            </Flex>
+                                          </Flex>
+                                        ))}
+                                      </VStack>
+                                    )}
+                                  </Box>
+
+                                  <Box bg={C.surface} border={`1px solid ${C.border}`} borderRadius="10px" p={4}>
+                                    <Text fontSize="13px" fontWeight="700" color={C.text} mb={3}>Popular Add-On Services</Text>
+                                    {analyticsData.popularAddOns.length === 0 ? (
+                                      <Text fontSize="12px" color={C.muted}>No add-on requests yet.</Text>
+                                    ) : (
+                                      <VStack align="stretch" spacing={2}>
+                                        {analyticsData.popularAddOns.map(a => (
+                                          <Flex key={a.name} align="center" justify="space-between">
+                                            <Text fontSize="12px" color={C.sub}>{a.name}</Text>
+                                            <Text fontSize="12px" fontWeight="600" color={C.text}>{a.count} requests</Text>
+                                          </Flex>
+                                        ))}
+                                      </VStack>
+                                    )}
+                                  </Box>
+                                </SimpleGrid>
                               </Stack>
                             )}
                           </Section>

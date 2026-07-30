@@ -35,7 +35,11 @@ class UserService @Inject()(
             User(0, "valet", "valet@test.com", BCrypt.hashpw("valet", BCrypt.gensalt()), "Valet"),
             User(0, "advisor", "advisor@test.com", BCrypt.hashpw("advisor", BCrypt.gensalt()), "Service Advisor")
           )
-          Future.sequence(users.map(repo.insert)).map(_ => ())
+          Future.sequence(users.map { u =>
+            repo.insert(u).recover {
+              case _ => 0L
+            }
+          }).map(_ => ())
         } else {
           Future.successful(())
         }

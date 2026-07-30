@@ -14,6 +14,8 @@ GET     /admin                       controllers.HomeController.admin()
 + nocsrf
 POST    /api/login                   controllers.AuthController.login
 
+GET     /api/ws                      controllers.WebSocketController.ws()
+
 + nocsrf
 POST    /api/signup                  controllers.AuthController.signup
 
@@ -128,6 +130,7 @@ POST    /admin/visits/:id/add-ons/complete controllers.VisitController.completeA
 POST    /admin/visits/:id/check-out  controllers.VisitController.checkOut(id: Long)
 
 GET     /api/admin/visits            controllers.VisitController.getAllVisits
+GET     /api/admin/metrics           controllers.AnalyticsController.getMetrics
 GET     /api/admin/visits/:id        controllers.VisitController.getVisitById(id: Long)
 + nocsrf
 POST    /api/admin/visits/check-in   controllers.VisitController.checkIn

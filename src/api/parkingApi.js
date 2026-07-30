@@ -166,5 +166,7 @@ export const parkingApi = {
     apiRequest("admin", "/surge", {
       method: "POST",
       body: JSON.stringify({ multiplier })
-    })
+    }),
+
+  getAnalytics: () => apiRequest("admin", "/metrics")
 };

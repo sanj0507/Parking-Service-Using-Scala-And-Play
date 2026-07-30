@@ -20,8 +20,14 @@ class VisitService @Inject()(
     slotRepo: repository.ParkingSlotRepository,
     cache: AsyncCacheApi,
     kafkaService: KafkaProducerService,
-    config: play.api.Configuration
+    config: play.api.Configuration,
+    wsManager: WebSocketManager
 )(implicit ec: ExecutionContext) {
+
+  private def invalidateCache(): Future[Unit] = {
+    wsManager.broadcast("update")
+    cache.remove("visits-with-addons").map(_ => ())
+  }
   def initialize(): Future[Unit] =
     for {
       _ <- repo.createTable()
@@ -52,7 +58,9 @@ class VisitService @Inject()(
         distanceFromEntrance = distance
       )
     }
-    slotRepo.insertBatch(slots).map(_ => ())
+    slotRepo.insertBatch(slots).recover {
+      case _ => 0
+    }.map(_ => ())
   }
 
   private def seedVisitEntries(): Future[Unit] = {
@@ -129,7 +137,11 @@ class VisitService @Inject()(
     )
 
     for {
-      visitIds <- Future.sequence(visits.map(repo.insert))
+      _ <- Future.sequence(visits.map { v =>
+        repo.insert(v).recover {
+          case _ => 0L
+        }
+      })
       _ <- slotRepo.updateStatus(1, "Occupied")
       _ <- slotRepo.updateStatus(2, "Occupied")
       _ <- slotRepo.updateStatus(3, "Occupied")
@@ -161,7 +173,7 @@ class VisitService @Inject()(
             createdAt = currentTime
           )
           repo.insert(updatedVisit).flatMap { id =>
-            cache.remove("visits-with-addons").map(_ => id)
+            invalidateCache().map(_ => id)
           }
       }
     }
@@ -193,7 +205,9 @@ class VisitService @Inject()(
       expectedStatus = models.VisitStatus.CheckedIn,
       nextStatus = models.VisitStatus.Requested,
       errorMessage = "Vehicle can only be requested from CheckedIn status"
-    )
+    ).flatMap { res =>
+      repo.updateRequestedAt(id, currentTimestamp()).map(_ => res)
+    }
 
   def requestCheckout(id: Long): Future[Int] =
     updateVisitStatus(
@@ -229,7 +243,7 @@ class VisitService @Inject()(
                       visit.phoneNumber.foreach { phone =>
                         kafkaService.sendSmsNotification(phone, msg)
                       }
-                      cache.remove("visits-with-addons")
+                      invalidateCache()
                     }
                   } yield res
 
@@ -247,7 +261,7 @@ class VisitService @Inject()(
               case None => Future.successful(())
             }
             freeSlotFuture.flatMap { _ =>
-              repo.updateStatus(id, models.VisitStatus.InProgress).flatMap(res => cache.remove("visits-with-addons").map(_ => res))
+              repo.updateStatus(id, models.VisitStatus.InProgress).flatMap(res => invalidateCache().map(_ => res))
             }
 
           case _ =>
@@ -296,20 +310,22 @@ class VisitService @Inject()(
         visit.status match {
           case models.VisitStatus.CheckedIn | models.VisitStatus.InProgress =>
             repo.updateStatus(id, models.VisitStatus.Ready).flatMap { res =>
-              val locationOpt = visit.slotId.map(s => "D%02d".format(s)).getOrElse("unknown")
-              val frontendUrl = config.getOptional[String]("app.frontend.url").getOrElse("http://localhost:3000")
-              val checkoutUrl = s"$frontendUrl/checkout/$id"
-              val msg = s"your vehicle ${visit.vehicleNumber} has been serviced and is now ready for check-out at $locationOpt. You can checkout using this link: $checkoutUrl"
-              
-              val payload = Json.obj(
-                "email" -> play.api.libs.json.JsString(visit.email.getOrElse("")),
-                "message" -> play.api.libs.json.JsString(msg)
-              ).toString()
-              kafkaService.sendEmailNotification(payload)
-              visit.phoneNumber.foreach { phone =>
-                kafkaService.sendSmsNotification(phone, msg)
+              repo.updateReadyAt(id, currentTimestamp()).flatMap { _ =>
+                val locationOpt = visit.slotId.map(s => "D%02d".format(s)).getOrElse("unknown")
+                val frontendUrl = config.getOptional[String]("app.frontend.url").getOrElse("http://localhost:3000")
+                val checkoutUrl = s"$frontendUrl/checkout/$id"
+                val msg = s"your vehicle ${visit.vehicleNumber} has been serviced and is now ready for check-out at $locationOpt. You can checkout using this link: $checkoutUrl"
+                
+                val payload = Json.obj(
+                  "email" -> play.api.libs.json.JsString(visit.email.getOrElse("")),
+                  "message" -> play.api.libs.json.JsString(msg)
+                ).toString()
+                kafkaService.sendEmailNotification(payload)
+                visit.phoneNumber.foreach { phone =>
+                  kafkaService.sendSmsNotification(phone, msg)
+                }
+                invalidateCache().map(_ => res)
               }
-              cache.remove("visits-with-addons").map(_ => res)
             }
 
           case models.VisitStatus.Ready =>
@@ -348,7 +364,7 @@ class VisitService @Inject()(
               status = AddOnStatus.Requested,
               createdAt = currentTime
             )
-          ).flatMap(_ => cache.remove("visits-with-addons")).map(_ => s"Add-on service '$normalizedServiceName' requested for visit $id")
+          ).flatMap(_ => invalidateCache()).map(_ => s"Add-on service '$normalizedServiceName' requested for visit $id")
         }
 
       case None =>
@@ -376,7 +392,7 @@ class VisitService @Inject()(
             errorMessage = "Add-on can only be started from RequestedAddOn status"
           ).flatMap { successMessage =>
             repo.updateStatus(id, models.VisitStatus.InProgress).flatMap { _ =>
-              cache.remove("visits-with-addons").map(_ => successMessage)
+              invalidateCache().map(_ => successMessage)
             }
           }
         }
@@ -414,7 +430,7 @@ class VisitService @Inject()(
                 }
               case None =>
             }
-            cache.remove("visits-with-addons").map(_ => successMessage)
+            invalidateCache().map(_ => successMessage)
           }
         } else {
           Future.successful(successMessage)
@@ -456,7 +472,7 @@ class VisitService @Inject()(
             freeSlotFuture.flatMap { _ =>
               repo.updateStatus(id, models.VisitStatus.CheckedOut).flatMap { res =>
                 sendCheckoutNotifications(visit, Some(bill.totalFee))
-                Future.successful(res)
+                invalidateCache().map(_ => res)
               }
             }
           }
@@ -490,7 +506,7 @@ class VisitService @Inject()(
         if (visit.status != expectedStatus) {
           Future.failed(new Exception(errorMessage))
         } else {
-          repo.updateStatus(id, nextStatus).flatMap(res => cache.remove("visits-with-addons").map(_ => res))
+          repo.updateStatus(id, nextStatus).flatMap(res => invalidateCache().map(_ => res))
         }
 
       case None =>
@@ -517,7 +533,7 @@ class VisitService @Inject()(
         nextStatus = nextStatus
       ).flatMap {
         case updated if updated > 0 =>
-          cache.remove("visits-with-addons").map(_ => s"Add-on service '$normalizedServiceName' moved to $nextStatus for visit $id")
+          invalidateCache().map(_ => s"Add-on service '$normalizedServiceName' moved to $nextStatus for visit $id")
 
         case _ =>
           Future.failed(new Exception(errorMessage))

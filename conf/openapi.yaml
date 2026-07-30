@@ -1,25 +1,73 @@
 openapi: 3.0.3
-
 info:
   title: Parking Visit Management API
-  description: APIs for managing parking visits and valet operations
+  description: APIs for managing parking visits, authentication, and valet operations across different personas (User, Valet, Admin).
   version: 1.0.0
-
 servers:
   - url: http://localhost:9000
-POST /api/visits
-paths:
-  /api/visits:
-    post:
-      summary: Create a parking visit
+tags:
+  - name: Auth
+    description: Authentication and Registration
+  - name: User Workflow
+    description: APIs for Customers
+  - name: Valet Workflow
+    description: APIs for Valet Staff
+  - name: Admin Workflow
+    description: APIs for Administrators
+  - name: General Visits
+    description: General visit operations
+  - name: Webhooks
+    description: External webhooks
 
+paths:
+  /api/login:
+    post:
+      tags: [Auth]
+      summary: User login
+      responses:
+        '200':
+          description: Successful login
+  
+  /api/signup:
+    post:
+      tags: [Auth]
+      summary: User registration
+      responses:
+        '201':
+          description: User created successfully
+
+  /api/admin/users/pending:
+    get:
+      tags: [Admin Workflow]
+      summary: Get pending users
+      responses:
+        '200':
+          description: List of pending users
+
+  /api/admin/users/{id}/role:
+    post:
+      tags: [Admin Workflow]
+      summary: Assign a role to a user
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        '200':
+          description: Role assigned successfully
+
+  /api/user/visits/check-in:
+    post:
+      tags: [User Workflow]
+      summary: Customer self check-in
       requestBody:
         required: true
         content:
           application/json:
             schema:
               $ref: '#/components/schemas/CreateVisitRequest'
-
       responses:
         '201':
           description: Visit created successfully
@@ -27,101 +75,417 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/VisitResponse'
-POST /api/visits/{id}/acknowledge
-  /api/visits/{id}/acknowledge:
-    post:
-      summary: Acknowledge a visit
 
+  /api/user/visits/{id}:
+    get:
+      tags: [User Workflow]
+      summary: Get visit details for a user
       parameters:
         - name: id
           in: path
           required: true
           schema:
             type: integer
-
       responses:
         '200':
-          description: Visit acknowledged successfully
-POST /api/visits/{id}/ready
-  /api/visits/{id}/ready:
-    post:
-      summary: Mark vehicle as ready
+          description: Visit details
 
+  /api/user/visits/{id}/request-vehicle:
+    post:
+      tags: [User Workflow]
+      summary: Customer requests their vehicle
       parameters:
         - name: id
           in: path
           required: true
           schema:
             type: integer
-
       responses:
         '200':
-          description: Vehicle marked as ready
-POST /api/visits/{id}/addon
-  /api/visits/{id}/addon:
-    post:
-      summary: Add additional services
+          description: Vehicle requested
 
+  /api/user/visits/{id}/request-checkout:
+    post:
+      tags: [User Workflow]
+      summary: Customer requests to checkout
       parameters:
         - name: id
           in: path
           required: true
           schema:
             type: integer
-
       responses:
         '200':
-          description: Add-on service added
-POST /api/visits/{id}/checkout
-  /api/visits/{id}/checkout:
-    post:
-      summary: Checkout vehicle
+          description: Checkout requested
 
+  /api/user/visits/{id}/check-out:
+    post:
+      tags: [User Workflow]
+      summary: Customer checks out
       parameters:
         - name: id
           in: path
           required: true
           schema:
             type: integer
-
       responses:
         '200':
-          description: Vehicle checked out successfully
+          description: Checked out
+
+  /api/user/visits/{id}/add-ons:
+    get:
+      tags: [User Workflow]
+      summary: Get add-ons for a visit
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        '200':
+          description: List of add-ons
+    post:
+      tags: [User Workflow]
+      summary: Request new add-on for a visit
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        '200':
+          description: Add-on requested
+
+  /api/valet/visits/{id}:
+    get:
+      tags: [Valet Workflow]
+      summary: Get visit details for valet
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        '200':
+          description: Visit details
+
+  /api/valet/visits/{id}/add-ons:
+    get:
+      tags: [Valet Workflow]
+      summary: Get add-ons for a visit (Valet view)
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        '200':
+          description: List of add-ons
+
+  /api/valet/visits/{id}/acknowledge:
+    post:
+      tags: [Valet Workflow]
+      summary: Valet acknowledges vehicle request
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        '200':
+          description: Acknowledged
+
+  /api/valet/visits/{id}/ready:
+    post:
+      tags: [Valet Workflow]
+      summary: Valet marks vehicle as ready
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        '200':
+          description: Vehicle ready
+
+  /api/valet/visits/{id}/accept-checkout:
+    post:
+      tags: [Valet Workflow]
+      summary: Valet accepts checkout request
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        '200':
+          description: Checkout accepted
+
+  /api/valet/visits/{id}/add-ons/start:
+    post:
+      tags: [Valet Workflow]
+      summary: Valet starts an add-on
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        '200':
+          description: Add-on started
+
+  /api/valet/visits/{id}/add-ons/complete:
+    post:
+      tags: [Valet Workflow]
+      summary: Valet completes an add-on
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        '200':
+          description: Add-on completed
+
+  /api/admin/visits:
+    get:
+      tags: [Admin Workflow]
+      summary: Get all visits
+      responses:
+        '200':
+          description: List of visits
+
+  /api/admin/visits/{id}:
+    get:
+      tags: [Admin Workflow]
+      summary: Get visit by ID
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        '200':
+          description: Visit details
+
+  /api/admin/visits/check-in:
+    post:
+      tags: [Admin Workflow]
+      summary: Admin check-in a vehicle
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateVisitRequest'
+      responses:
+        '201':
+          description: Visit created
+
+  /api/admin/visits/{id}/request-vehicle:
+    post:
+      tags: [Admin Workflow]
+      summary: Admin request vehicle
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        '200':
+          description: Vehicle requested
+
+  /api/admin/visits/{id}/request-checkout:
+    post:
+      tags: [Admin Workflow]
+      summary: Admin request checkout
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        '200':
+          description: Checkout requested
+
+  /api/admin/visits/{id}/acknowledge:
+    post:
+      tags: [Admin Workflow]
+      summary: Admin acknowledge request
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        '200':
+          description: Acknowledged
+
+  /api/admin/visits/{id}/ready:
+    post:
+      tags: [Admin Workflow]
+      summary: Admin mark vehicle ready
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        '200':
+          description: Vehicle ready
+
+  /api/admin/visits/{id}/add-ons:
+    get:
+      tags: [Admin Workflow]
+      summary: Get add-ons for a visit (Admin view)
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        '200':
+          description: List of add-ons
+    post:
+      tags: [Admin Workflow]
+      summary: Admin add an add-on
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        '200':
+          description: Add-on added
+
+  /api/admin/visits/{id}/add-ons/start:
+    post:
+      tags: [Admin Workflow]
+      summary: Admin start an add-on
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        '200':
+          description: Add-on started
+
+  /api/admin/visits/{id}/add-ons/complete:
+    post:
+      tags: [Admin Workflow]
+      summary: Admin complete an add-on
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        '200':
+          description: Add-on completed
+
+  /api/admin/visits/{id}/check-out:
+    post:
+      tags: [Admin Workflow]
+      summary: Admin checkout vehicle
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        '200':
+          description: Vehicle checked out
+
+  /api/visits/{id}/bill:
+    get:
+      tags: [General Visits]
+      summary: Get bill for a visit
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        '200':
+          description: Bill details
+
+  /api/visits/{id}/request-checkout:
+    post:
+      tags: [General Visits]
+      summary: Public request checkout
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        '200':
+          description: Checkout requested
+
+  /api/webhook/payment:
+    post:
+      tags: [Webhooks]
+      summary: Payment webhook
+      responses:
+        '200':
+          description: Payment processed
+
+  /api/admin/surge:
+    post:
+      tags: [Admin Workflow]
+      summary: Set surge pricing
+      responses:
+        '200':
+          description: Surge pricing updated
+
 components:
   schemas:
-
     CreateVisitRequest:
       type: object
-
       required:
         - vehicleNumber
         - customerName
-
       properties:
         vehicleNumber:
           type: string
           example: TN01AB1234
-
         customerName:
           type: string
           example: Sanjana
-
     VisitResponse:
       type: object
-
       properties:
         visitId:
           type: integer
           example: 101
-
         vehicleNumber:
           type: string
           example: TN01AB1234
-
         customerName:
           type: string
           example: Sanjana
-
         status:
           type: string
           example: REQUESTED

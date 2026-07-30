@@ -30,9 +30,11 @@ class VisitRepository @Inject()(
 
     def checkoutAt = column[Option[String]]("checkout_at")
     def totalFee = column[Option[Double]]("total_fee")
+    def requestedAt = column[Option[String]]("requested_at")
+    def readyAt = column[Option[String]]("ready_at")
 
     def * =
-      (id, vehicleNumber, customerName, status, createdAt, email, phoneNumber, vehicleType, slotId, checkoutAt, totalFee) <> ((Visit.apply _).tupled, Visit.unapply)
+      (id, vehicleNumber, customerName, status, createdAt, email, phoneNumber, vehicleType, slotId, checkoutAt, totalFee, requestedAt, readyAt) <> ((Visit.apply _).tupled, Visit.unapply)
   }
 
   class AddOnRequestsTable(tag: Tag)
@@ -131,5 +133,21 @@ class VisitRepository @Inject()(
         )
         .result
         .headOption
+    )
+
+  def updateRequestedAt(id: Long, requestedAt: String): Future[Int] =
+    db.run(
+      visits
+        .filter(_.id === id)
+        .map(_.requestedAt)
+        .update(Some(requestedAt))
+    )
+
+  def updateReadyAt(id: Long, readyAt: String): Future[Int] =
+    db.run(
+      visits
+        .filter(_.id === id)
+        .map(_.readyAt)
+        .update(Some(readyAt))
     )
 }

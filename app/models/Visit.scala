@@ -13,7 +13,9 @@ case class Visit(
     vehicleType: String,
     slotId: Option[Long] = None,
     checkoutAt: Option[String] = None,
-    totalFee: Option[Double] = None
+    totalFee: Option[Double] = None,
+    requestedAt: Option[String] = None,
+    readyAt: Option[String] = None
 )
 
 object Visit {
@@ -32,6 +34,8 @@ case class VisitWithAddOns(
     slotId: Option[Long],
     checkoutAt: Option[String],
     totalFee: Option[Double],
+    requestedAt: Option[String],
+    readyAt: Option[String],
     addOns: Seq[AddOnRequest]
 )
 
@@ -51,6 +55,8 @@ object VisitWithAddOns {
       slotId = visit.slotId,
       checkoutAt = visit.checkoutAt,
       totalFee = visit.totalFee,
+      requestedAt = visit.requestedAt,
+      readyAt = visit.readyAt,
       addOns = addOns
     )
 }
