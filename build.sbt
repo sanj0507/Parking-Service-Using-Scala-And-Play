@@ -23,6 +23,7 @@ libraryDependencies ++= Seq(
   "com.typesafe.play" %% "play-mailer" % "9.0.0",
   "com.typesafe.play" %% "play-mailer-guice" % "9.0.0",
   "com.twilio.sdk" % "twilio" % "9.14.0",
+  "com.itextpdf" % "itextpdf" % "5.5.13.3",
   "org.scalatestplus.play" %% "scalatestplus-play" % "7.0.2" % Test
 )
 

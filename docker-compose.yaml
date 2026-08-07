@@ -42,7 +42,8 @@ services:
       APPLICATION_SECRET: "changeme-this-is-a-long-secret-for-jwt-256-bits"
       REDIS_HOST: redis
       KAFKA_BOOTSTRAP_SERVERS: kafka:9092
-      MAIL_HOST: mailpit
+      MAIL_USER: ${MAIL_USER}
+      MAIL_PASSWORD: ${MAIL_PASSWORD}
       TWILIO_ACCOUNT_SID: ${TWILIO_ACCOUNT_SID}
       TWILIO_AUTH_TOKEN: ${TWILIO_AUTH_TOKEN}
       TWILIO_PHONE_NUMBER: ${TWILIO_PHONE_NUMBER}

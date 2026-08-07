@@ -236,8 +236,13 @@ class VisitService @Inject()(
                       val msg = s"your vehicle ${visit.vehicleNumber} has been accepted for check-in at $time and parked at $location"
                       
                       val payload = Json.obj(
+                        "customerName" -> play.api.libs.json.JsString(visit.customerName),
                         "email" -> play.api.libs.json.JsString(visit.email.getOrElse("")),
-                        "message" -> play.api.libs.json.JsString(msg)
+                        "message" -> play.api.libs.json.JsString(msg),
+                        "emailType" -> play.api.libs.json.JsString("CHECKIN"),
+                        "bookingId" -> play.api.libs.json.JsString(id.toString),
+                        "spot" -> play.api.libs.json.JsString(location),
+                        "price" -> play.api.libs.json.JsString("N/A - Check-in")
                       ).toString()
                       kafkaService.sendEmailNotification(payload)
                       visit.phoneNumber.foreach { phone =>
@@ -277,12 +282,17 @@ class VisitService @Inject()(
     }
 
   private def sendCheckoutNotifications(visit: Visit, totalFee: Option[Double]): Unit = {
-    val amountText = totalFee.map(f => f" Amount due: $$${f}%.2f.").getOrElse("")
+    val amountText = totalFee.map(f => f" Amount due: \u20B9${f}%.2f.").getOrElse("")
     val locationOpt = visit.slotId.map(s => "E%02d".format(s)).getOrElse("unknown")
     val message = s"your vehicle ${visit.vehicleNumber} has been succesfully checked-out from $locationOpt.$amountText Thank u for using our service"
     val payload = Json.obj(
+      "customerName" -> play.api.libs.json.JsString(visit.customerName),
       "email" -> play.api.libs.json.JsString(visit.email.getOrElse("")),
-      "message" -> play.api.libs.json.JsString(message)
+      "message" -> play.api.libs.json.JsString(message),
+      "emailType" -> play.api.libs.json.JsString("CHECKOUT"),
+      "bookingId" -> play.api.libs.json.JsString(visit.id.toString),
+      "spot" -> play.api.libs.json.JsString(locationOpt),
+      "price" -> play.api.libs.json.JsString(f"\u20B9${totalFee.getOrElse(0.0)}%.2f")
     ).toString()
     kafkaService.sendEmailNotification(payload)
     visit.phoneNumber.foreach { phone =>
@@ -317,8 +327,11 @@ class VisitService @Inject()(
                 val msg = s"your vehicle ${visit.vehicleNumber} has been serviced and is now ready for check-out at $locationOpt. You can checkout using this link: $checkoutUrl"
                 
                 val payload = Json.obj(
+                  "customerName" -> play.api.libs.json.JsString(visit.customerName),
                   "email" -> play.api.libs.json.JsString(visit.email.getOrElse("")),
-                  "message" -> play.api.libs.json.JsString(msg)
+                  "message" -> play.api.libs.json.JsString(msg),
+                  "emailType" -> play.api.libs.json.JsString("UPDATE"),
+                  "bookingId" -> play.api.libs.json.JsString(id.toString)
                 ).toString()
                 kafkaService.sendEmailNotification(payload)
                 visit.phoneNumber.foreach { phone =>
@@ -421,8 +434,11 @@ class VisitService @Inject()(
                 val msg = s"your vehicle ${v.vehicleNumber} has been serviced and is now ready for check-out at $locationOpt. You can checkout using this link: $checkoutUrl"
                 
                 val payload = Json.obj(
+                  "customerName" -> play.api.libs.json.JsString(v.customerName),
                   "email" -> play.api.libs.json.JsString(v.email.getOrElse("")),
-                  "message" -> play.api.libs.json.JsString(msg)
+                  "message" -> play.api.libs.json.JsString(msg),
+                  "emailType" -> play.api.libs.json.JsString("UPDATE"),
+                  "bookingId" -> play.api.libs.json.JsString(v.id.toString)
                 ).toString()
                 kafkaService.sendEmailNotification(payload)
                 v.phoneNumber.foreach { phone =>
@@ -447,10 +463,34 @@ class VisitService @Inject()(
           val createdAt = LocalDateTime.parse(visit.createdAt, formatter)
           val now = LocalDateTime.now()
           val minutes = ChronoUnit.MINUTES.between(createdAt, now)
-          val hours = Math.max(1.0, minutes / 60.0)
-          val baseRate = 5.0
-          val totalFee = hours * baseRate * surgeMultiplier
-          Bill(id, hours, baseRate, surgeMultiplier, totalFee)
+          
+          val vehicleMultiplier = visit.vehicleType.toLowerCase match {
+            case t if t.contains("suv") || t.contains("truck") || t.contains("heavy") || t.contains("van") => 1.5
+            case t if t.contains("bike") || t.contains("two") => 0.5
+            case _ => 1.0 // standard car
+          }
+
+          val (billedHours, feeBeforeSurge) = if (minutes <= 15) {
+            (0.0, 0.0) // Grace period
+          } else {
+            val hours = Math.ceil(minutes / 60.0).toInt
+            val days = hours / 24
+            val remainingHours = hours % 24
+            
+            val dailyMax = 300.0
+            
+            val hourlyFee = if (remainingHours == 0) 0.0
+              else if (remainingHours == 1) 50.0
+              else if (remainingHours == 2) 90.0
+              else 90.0 + ((remainingHours - 2) * 30.0)
+              
+            val calculatedFee = (days * dailyMax) + Math.min(hourlyFee, dailyMax)
+            (hours.toDouble, calculatedFee * vehicleMultiplier)
+          }
+
+          val totalFee = feeBeforeSurge * surgeMultiplier
+          val baseRate = 50.0
+          Bill(id, billedHours, baseRate, surgeMultiplier, totalFee)
         }
       case None => Future.failed(new Exception(s"Visit with id $id not found"))
     }
