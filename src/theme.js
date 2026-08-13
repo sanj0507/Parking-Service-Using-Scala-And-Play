@@ -1,25 +1,36 @@
 import { extendTheme } from "@chakra-ui/react";
+import { C } from "./theme/palette.js";
 
 export const theme = extendTheme({
   fonts: {
-    heading: "'Syne', sans-serif",
-    body: "'Syne', sans-serif",
+    heading: "'Inter', system-ui, sans-serif",
+    body: "'Inter', system-ui, sans-serif",
     mono: "'JetBrains Mono', monospace",
   },
   styles: {
     global: {
       body: {
-        bg: "#f5f6fa",
-        color: "#111827",
+        bg: C.bg,
+        color: C.text,
+        lineHeight: "tall",
       },
     },
   },
   components: {
     Button: {
-      baseStyle: { fontWeight: 700, borderRadius: "10px" },
+      baseStyle: { fontWeight: 700, borderRadius: "lg" },
     },
     Input: {
-      defaultProps: { focusBorderColor: "#c8ccd8" },
+      defaultProps: { focusBorderColor: C.borderFocus },
+      baseStyle: { field: { borderRadius: "lg" } },
+    },
+    Select: {
+      baseStyle: { field: { borderRadius: "lg" } },
+    },
+    Modal: {
+      baseStyle: {
+        dialog: { borderRadius: "xl" },
+      },
     },
   },
 });
