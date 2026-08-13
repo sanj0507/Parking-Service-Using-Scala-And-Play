@@ -3,6 +3,7 @@ import { Box, Button, Flex, FormControl, FormLabel, Input, Text, useToast, VStac
 import { ParkingCircle } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 import { parkingApi } from "./api/parkingApi";
+import { C } from "./theme/palette.js";
 
 export default function Login() {
   const [isLogin, setIsLogin] = useState(true);
@@ -62,56 +63,56 @@ export default function Login() {
   };
 
   return (
-    <Flex minH="100vh" bg="#f0f3f8" align="center" justify="center" p={4}>
-      <Box w="full" maxW="400px" bg="white" borderRadius="16px" boxShadow="0 4px 20px rgba(0,0,0,0.05)" p={8}>
-        <Flex direction="column" align="center" mb={8}>
-          <Flex w="48px" h="48px" borderRadius="12px" bg="linear-gradient(135deg,#2563eb,#6366f1)" align="center" justify="center" mb={4}>
+    <Flex minH="100vh" bg={C.bg} align="center" justify="center" p={4}>
+      <Box w="full" maxW="400px" bg={C.surface} borderRadius="2xl" boxShadow="0 4px 16px rgba(0,0,0,0.06)" p={10}>
+        <Flex direction="column" align="center" mb={10}>
+          <Flex w="48px" h="48px" borderRadius="12px" bg={`linear-gradient(135deg, ${C.blue}, ${C.indigo})`} align="center" justify="center" mb={4}>
             <Icon as={ParkingCircle} boxSize={6} color="white" />
           </Flex>
-          <Text fontSize="24px" fontWeight="800" color="#0f1623">ParkOps</Text>
-          <Text fontSize="14px" color="#6b7280" mt={1}>{isLogin ? "Sign in to your account" : "Request access"}</Text>
+          <Text fontSize="24px" fontWeight="800" color={C.text}>ParkOps</Text>
+          <Text fontSize="14px" color={C.muted} mt={1}>{isLogin ? "Sign in to your account" : "Request access"}</Text>
         </Flex>
 
         <form onSubmit={handleSubmit}>
           <VStack spacing={4}>
             <FormControl isRequired>
-              <FormLabel fontSize="12px" fontWeight="600" color="#4b5568">Username</FormLabel>
+              <FormLabel fontSize="12px" fontWeight="600" color={C.sub}>Username</FormLabel>
               <Input
                 type="text"
                 value={username}
                 onChange={(e) => setUsername(e.target.value)}
                 placeholder="Enter your username"
-                bg="#f9fafb"
-                border="1px solid #e4e7f0"
-                _focus={{ borderColor: "#2563eb", boxShadow: "0 0 0 1px #2563eb" }}
+                bg={C.faint}
+                border={`1px solid ${C.border}`}
+                _focus={{ borderColor: C.blue, boxShadow: `0 0 0 1px ${C.blue}` }}
               />
             </FormControl>
 
             {!isLogin && (
               <FormControl isRequired>
-                <FormLabel fontSize="12px" fontWeight="600" color="#4b5568">Email</FormLabel>
+                <FormLabel fontSize="12px" fontWeight="600" color={C.sub}>Email</FormLabel>
                 <Input
                   type="email"
                   value={email}
                   onChange={(e) => setEmail(e.target.value)}
                   placeholder="Enter your email (for notifications)"
-                  bg="#f9fafb"
-                  border="1px solid #e4e7f0"
-                  _focus={{ borderColor: "#2563eb", boxShadow: "0 0 0 1px #2563eb" }}
+                  bg={C.faint}
+                  border={`1px solid ${C.border}`}
+                  _focus={{ borderColor: C.blue, boxShadow: `0 0 0 1px ${C.blue}` }}
                 />
               </FormControl>
             )}
 
             <FormControl isRequired>
-              <FormLabel fontSize="12px" fontWeight="600" color="#4b5568">Password</FormLabel>
+              <FormLabel fontSize="12px" fontWeight="600" color={C.sub}>Password</FormLabel>
               <Input
                 type="password"
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
                 placeholder="••••••••"
-                bg="#f9fafb"
-                border="1px solid #e4e7f0"
-                _focus={{ borderColor: "#2563eb", boxShadow: "0 0 0 1px #2563eb" }}
+                bg={C.faint}
+                border={`1px solid ${C.border}`}
+                _focus={{ borderColor: C.blue, boxShadow: `0 0 0 1px ${C.blue}` }}
               />
             </FormControl>
 
@@ -119,9 +120,9 @@ export default function Login() {
               type="submit"
               w="full"
               h="44px"
-              bg="#2563eb"
+              bg={C.blue}
               color="white"
-              _hover={{ bg: "#1d4ed8" }}
+              _hover={{ bg: C.blueHover }}
               isLoading={loading}
               mt={4}
             >
@@ -129,9 +130,9 @@ export default function Login() {
             </Button>
           </VStack>
         </form>
-        
+
         <Flex justify="center" mt={6}>
-          <Link fontSize="14px" color="#2563eb" fontWeight="500" onClick={() => setIsLogin(!isLogin)}>
+          <Link fontSize="14px" color={C.blue} fontWeight="500" onClick={() => setIsLogin(!isLogin)}>
             {isLogin ? "Need an account? Sign up" : "Already have an account? Sign in"}
           </Link>
         </Flex>
