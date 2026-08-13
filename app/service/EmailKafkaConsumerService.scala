@@ -148,7 +148,7 @@ class KafkaConsumerService @Inject()(
       Seq.empty[AttachmentData]
     }
 
-    val threadId = s"<booking-${bookingId}@parkops.local>"
+    val threadId = s"<booking-${boo kingId}@parkops.local>"
     val headers = if (bookingId.nonEmpty) {
       if (emailType == "CHECKIN") {
         Seq("Message-ID" -> threadId, "References" -> threadId)
