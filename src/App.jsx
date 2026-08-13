@@ -13,38 +13,13 @@ import {
 import { useEffect, useMemo, useState } from "react";
 import { BrowserRouter, Routes, Route, Navigate, useNavigate } from "react-router-dom";
 import { parkingApi } from "./api/parkingApi.js";
+import { C } from "./theme/palette.js";
 import Login from "./Login.jsx";
 import Checkout from "./Checkout.jsx";
 
-/* ─── Palette ────────────────────────────────────────────────── */
-const C = {
-  bg: "#f0f3f8",
-  surface: "#ffffff",
-  faint: "#f7f8fb",
-  border: "#e4e7f0",
-  borderFocus: "#bdc3d8",
-  text: "#0f1623",
-  sub: "#4b5568",
-  muted: "#8a92a8",
-
-  sidebar: "#0f1623",
-  sidebarSub: "#1c2540",
-  sidebarLine: "#253045",
-  sidebarMuted: "#5a6480",
-  sidebarText: "#c8d0e4",
-
-  blue: "#2563eb", blueSoft: "#eff6ff",
-  teal: "#0d9488", tealSoft: "#f0fdfa",
-  amber: "#d97706", amberSoft: "#fffbeb",
-  indigo: "#6366f1", indigoSoft: "#eef2ff",
-  green: "#16a34a", greenSoft: "#f0fdf4",
-  gray: "#6b7280", graySoft: "#f9fafb",
-  red: "#dc2626", redSoft: "#fef2f2",
-};
-
 /* ─── Status map ─────────────────────────────────────────────── */
 const STATUS = {
-  RequestedCheckIn: { label: "Check-In Req", color: "#60a5fa", soft: "#eff6ff" }, // Light Blue
+  RequestedCheckIn: { label: "Check-In Req", color: "#5F7B94", soft: C.blueSoft }, // Light Blue (muted)
   CheckedIn: { label: "Checked In", color: C.blue, soft: C.blueSoft },          // Dark Blue
   Requested: { label: "Requested", color: C.blue, soft: C.blueSoft },
   RequestedCheckout: { label: "Checkout Req", color: C.blue, soft: C.blueSoft },
@@ -535,10 +510,10 @@ function Dashboard({ tabName }) {
         position="sticky" top={0} h="100vh">
 
         {/* Brand */}
-        <Flex align="center" justify="space-between" px={5} py={5} borderBottom={`1px solid ${C.sidebarLine}`}>
+        <Flex align="center" justify="space-between" px={6} py={6} borderBottom={`1px solid ${C.sidebarLine}`}>
           <Flex align="center" gap={3}>
             <Flex w="32px" h="32px" borderRadius="9px"
-              bg="linear-gradient(135deg,#2563eb,#6366f1)"
+              bg={`linear-gradient(135deg, ${C.blue}, ${C.indigo})`}
               align="center" justify="center" flexShrink={0}>
               <Icon as={ParkingCircle} boxSize={3.5} color="white" />
             </Flex>
@@ -552,7 +527,7 @@ function Dashboard({ tabName }) {
         </Flex>
 
         {/* Nav */}
-        <Box flex={1} px={3} pt={5}>
+        <Box flex={1} px={4} pt={6}>
           <Text fontSize="9px" fontWeight="700" color={C.sidebarMuted}
             letterSpacing="0.16em" px={3} mb={2}>WORKSPACE ACTIONS</Text>
           <VStack spacing={0.5}>
@@ -560,7 +535,7 @@ function Dashboard({ tabName }) {
               const on = subTab === item.key;
               return (
                 <Flex key={item.key} as="button" w="full" align="center" gap={2.5}
-                  px={3} py={2.5} borderRadius="8px"
+                  px={3.5} py={3} borderRadius="9px"
                   bg={on ? C.sidebarSub : "transparent"}
                   onClick={() => setSubTab(item.key)}
                   transition="background 0.12s" _hover={{ bg: C.sidebarSub }}
@@ -581,7 +556,7 @@ function Dashboard({ tabName }) {
         </Box>
 
         {/* Occupancy widget */}
-        <Box px={4} py={5} borderTop={`1px solid ${C.sidebarLine}`}>
+        <Box px={5} py={6} borderTop={`1px solid ${C.sidebarLine}`}>
           <Box bg="#ffffff08" border={`1px solid ${C.sidebarLine}`} borderRadius="10px" p={3} mb={3}>
             <Text fontSize="9px" fontWeight="700" color={C.sidebarMuted} letterSpacing="0.14em">OCCUPANCY</Text>
             <Flex align="baseline" gap={1.5} mt={1.5}>
@@ -603,11 +578,11 @@ function Dashboard({ tabName }) {
       <Box flex={1} minW={0} overflowY="auto">
 
         {/* Topbar */}
-        <Flex px={{ base: 5, md: 8 }} py={3.5} bg={C.surface}
+        <Flex px={{ base: 6, md: 10 }} py={4.5} bg={C.surface}
           borderBottom={`1px solid ${C.border}`}
           align="center" justify="space-between"
           position="sticky" top={0} zIndex={10}
-          boxShadow="0 1px 0 #e4e7f0">
+          boxShadow={`0 1px 0 ${C.border}`}>
           <Box>
             <HStack spacing={2} mb={0.5}>
               <Box w="6px" h="6px" borderRadius="full" bg={nav.color} />
@@ -636,11 +611,11 @@ function Dashboard({ tabName }) {
           </HStack>
         </Flex>
 
-        <Box px={{ base: 5, md: 8 }} py={5}>
-          <Stack spacing={4}>
+        <Box px={{ base: 6, md: 10 }} py={7}>
+          <Stack spacing={5}>
 
             {/* ── Metric cards (moved to top for compactness) ── */}
-            <SimpleGrid columns={{ base: 2, sm: 3, md: 5 }} spacing={3}>
+            <SimpleGrid columns={{ base: 2, sm: 3, md: 5 }} spacing={4}>
               {[
                 { icon: Car, label: "Active", value: m.active, color: C.blue, soft: C.blueSoft },
                 { icon: Timer, label: "Waiting", value: m.waiting, color: C.amber, soft: C.amberSoft },
@@ -649,7 +624,7 @@ function Dashboard({ tabName }) {
                 { icon: ParkingCircle, label: "Free Slots", value: m.free, color: C.teal, soft: C.tealSoft, suffix: `/${TOTAL}` },
               ].map(c => (
                 <Box key={c.label} bg={C.surface} border={`1px solid ${C.border}`}
-                  borderTop={`3px solid ${c.color}`} borderRadius="12px" p={3}
+                  borderTop={`3px solid ${c.color}`} borderRadius="14px" p={4}
                   _hover={{ boxShadow: "0 4px 12px rgba(0,0,0,0.05)", transform: "translateY(-1px)" }}
                   transition="all 0.15s">
                   <Flex align="center" gap={2}>
@@ -668,11 +643,11 @@ function Dashboard({ tabName }) {
             </SimpleGrid>
 
             {/* ── Unified Split Dashboard Layout ── */}
-            <Grid templateColumns={{ base: "1fr", xl: "1.15fr 0.85fr" }} gap={5} alignItems="start">
+            <Grid templateColumns={{ base: "1fr", xl: "1.15fr 0.85fr" }} gap={6} alignItems="start">
 
               {/* Left Pane: Controls, Active Lot & API Logs */}
               <GridItem>
-                <Stack spacing={4}>
+                <Stack spacing={5}>
 
                   {/* Tabbed Action Panels */}
                   <Card>
@@ -1253,8 +1228,8 @@ function Dashboard({ tabName }) {
 
 function Card({ children }) {
   return (
-    <Box bg={C.surface} border={`1px solid ${C.border}`} borderRadius="14px"
-      p={{ base: 5, md: 6 }} boxShadow="0 1px 3px rgba(0,0,0,0.04)">
+    <Box bg={C.surface} border={`1px solid ${C.border}`} borderRadius="16px"
+      p={{ base: 6, md: 8 }} boxShadow="0 1px 3px rgba(0,0,0,0.04)">
       {children}
     </Box>
   );
@@ -1281,9 +1256,9 @@ function Field({ label, required, ...props }) {
   return (
     <FormControl isRequired={required}>
       <FormLabel fontSize="11px" fontWeight="600" color={C.muted}
-        letterSpacing="0.06em" mb={1.5}>{label}</FormLabel>
+        letterSpacing="0.06em" mb={2}>{label}</FormLabel>
       <Input {...props} size="md" bg={C.surface} border={`1px solid ${C.border}`}
-        borderRadius="9px" color={C.text} fontSize="13px"
+        borderRadius="10px" color={C.text} fontSize="13px"
         _placeholder={{ color: "#bec4d4" }}
         _focus={{ borderColor: C.borderFocus, boxShadow: "none" }}
         _hover={{ borderColor: C.borderFocus }} />
@@ -1311,8 +1286,8 @@ function AppBtn({ color, soft, icon, children, outline, loading, size = "md", on
 function ActionRow({ color, soft, icon, title, sub, loading, disabled, onClick }) {
   return (
     <Flex as="button" onClick={disabled ? undefined : onClick} disabled={loading || disabled}
-      align="center" gap={3} px={4} py={3}
-      bg={C.surface} borderRadius="10px" border={`1px solid ${C.border}`}
+      align="center" gap={3} px={5} py={3.5}
+      bg={C.surface} borderRadius="12px" border={`1px solid ${C.border}`}
       _hover={{ borderColor: color, bg: soft, boxShadow: `0 2px 10px ${color}14` }}
       transition="all 0.14s" w="full"
       opacity={loading || disabled ? 0.5 : 1} cursor={loading || disabled ? "not-allowed" : "pointer"}>
@@ -1344,7 +1319,7 @@ function VehicleTable({ title, icon, iconColor, visits }) {
   const soft = iconColor === C.blue ? C.blueSoft : C.indigoSoft;
   return (
     <Box bg={C.surface} border={`1px solid ${C.border}`} borderRadius="10px" overflow="hidden">
-      <Flex px={4} py={2.5} align="center" gap={2} bg={C.faint} borderBottom={`1px solid ${C.border}`}>
+      <Flex px={5} py={3} align="center" gap={2} bg={C.faint} borderBottom={`1px solid ${C.border}`}>
         <Icon as={icon} boxSize={3.5} color={iconColor} />
         <Text fontSize="12px" fontWeight="700" color={C.text}>{title}</Text>
         <Box ml="auto" px={2} py={0.5} bg={soft} borderRadius="5px"
@@ -1356,11 +1331,11 @@ function VehicleTable({ title, icon, iconColor, visits }) {
           "&::-webkit-scrollbar-thumb": { background: C.border, borderRadius: "3px" }
         }}>
         {visits.length === 0 ? (
-          <Box px={4} py={5}>
+          <Box px={5} py={6}>
             <Text fontSize="12px" color={C.muted}>No vehicles</Text>
           </Box>
         ) : visits.map((v, i) => (
-          <Box key={v.id} px={4} py={2.5}
+          <Box key={v.id} px={5} py={3}
             borderBottom={i < visits.length - 1 ? `1px solid ${C.border}` : "none"}
             _hover={{ bg: C.faint }} transition="background 0.1s">
             <Flex justify="space-between" align="center" gap={2}>
