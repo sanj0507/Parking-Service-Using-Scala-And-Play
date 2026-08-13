@@ -3,12 +3,7 @@ import { useParams, useNavigate } from "react-router-dom";
 import { Box, Button, Flex, Spinner, Text, VStack, useToast, Icon, Heading, Divider } from "@chakra-ui/react";
 import { CheckCircle2, CreditCard, Receipt, Clock, Info } from "lucide-react";
 import { parkingApi } from "./api/parkingApi.js";
-
-const C = {
-  bg: "#f0f3f8", surface: "#ffffff", border: "#e4e7f0",
-  text: "#0f1623", muted: "#8a92a8", blue: "#2563eb",
-  green: "#16a34a", teal: "#0d9488", amber: "#d97706"
-};
+import { C } from "./theme/palette.js";
 
 export default function Checkout() {
   const { visitId } = useParams();
@@ -106,9 +101,9 @@ export default function Checkout() {
   }
 
   return (
-    <Flex minH="100vh" bg={C.bg} align="center" justify="center" p={4} fontFamily="'Inter', system-ui, sans-serif">
-      <Box bg={C.surface} p={6} borderRadius="2xl" boxShadow="0 4px 20px rgba(0,0,0,0.05)" maxW="400px" w="full" border={`1px solid ${C.border}`}>
-        <Flex align="center" gap={3} mb={6}>
+    <Flex minH="100vh" bg={C.bg} align="center" justify="center" p={4}>
+      <Box bg={C.surface} p={8} borderRadius="2xl" boxShadow="0 4px 16px rgba(0,0,0,0.06)" maxW="400px" w="full" border={`1px solid ${C.border}`}>
+        <Flex align="center" gap={3} mb={8}>
           <Flex w="40px" h="40px" borderRadius="10px" bg={`${C.blue}15`} align="center" justify="center">
             <Icon as={Receipt} color={C.blue} boxSize={5} />
           </Flex>
@@ -163,7 +158,7 @@ export default function Checkout() {
                   size="lg"
                   colorScheme="blue"
                   bg={C.blue}
-                  _hover={{ bg: "#1d4ed8" }}
+                  _hover={{ bg: C.blueHover }}
                   isLoading={paying}
                   onClick={handlePayment}
                   leftIcon={<CreditCard size={18} />}
